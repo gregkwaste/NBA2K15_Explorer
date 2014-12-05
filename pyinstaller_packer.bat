@@ -1,0 +1,1 @@
+C:\Python27-x64\Scripts\pyinstaller.exe -n NBA2K_Explorer -D -F --icon=tool_icon.ico 2k15qt.py
