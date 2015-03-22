@@ -5,7 +5,7 @@
 #####              NBA 2K15 EXPLORER                #####
 #							#
 #	          Coded by gregkwaste			#
-#							#
+#	        http://3dgamedevblog.com		#
 #							#
 
 
@@ -39,13 +39,19 @@ NBA Explorer is a tool for previewing/importing/exporting files from NBA 2K15 PC
 
 The tool includes a legal copy of the VideoLan VLC Media Player. All rights reserved to Videolan Corporation.
 
+#Thanks#
 
 Many thanks to TBM and buddaking from the NLSC forums, for testing and supporting this app.
-
 Many more thanks to all who donated on this project.
 
+Donating members, get involved into the testing of the tool and privilege from more updated versions and better support, so please consider donating to the project.
 
-Contact Information:
+#Contact Information#
+
+For any bugs or problems you can contact me from:
 
 email: gregkwaste@gmail.com
 website: http:\\3dgamedevblog.com
+
+Or if you like through the official NLSC forum topic:
+http://forums.nba-live.com/viewtopic.php?f=159&t=97283&sid=a463a37a983ad789204d7069525a7f40

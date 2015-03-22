@@ -786,6 +786,7 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
         menu.addAction(self.tr('Save Image'))
         menu.addAction(self.tr('Import Image'))
         menu.addAction(self.tr('Export Mesh'))
+        menu.addAction(self.tr('Make Coffee'))
 
         res=menu.exec_(self.mapToGlobal(position))
         if not res:
@@ -799,7 +800,11 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
             f.close()
             #StatusBar notification
             self.window().statusBar.showMessage("Texture Saved to "+str(location[0]))
-        
+        elif res.text()=='Make Coffee':
+            print('Making Coffee for buddaking')
+            verts,norms,faces=self.loadOBJ('coffee.obj')
+            self.object = self.customModel(faces,verts,norms)
+
         elif res.text()=='Import Image':
             print('Importing Image')
             location=QtGui.QFileDialog.getOpenFileName(caption="Open Image File",filter='*.dds ;; *.jpg ;; *.png')
@@ -885,7 +890,8 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
                 n = map(float, vals[1:4])
                 norms.append(n)
             if vals[0] == "f":
-                fa=map(int,vals[1:4])
+                vals = [val.split("/")[0] for val in vals[1:4]]
+                fa=map(int,vals)
                 faces.append([f-1 for f in fa])
         return verts,norms,faces
 

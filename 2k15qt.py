@@ -37,11 +37,11 @@ type_dict={0x44445320:'DDS',
            0x5A4C4942:'ZLIB'}
 
 archiveName_list= ['0A','0B','0C','0D','0E','0F','0G','0H','0I','0J','0K','0L','0M','0N','0O','0P','0Q','0R','0S','0T','0U','0V','0W','0X','0Y','0Z',
-                   '1A','1B','1C','1D','1E','1F','1G','1H','1I','1J','1K','1L','1M','1N']
+                   '1A','1B','1C','1D','1E','1F','1G','1H','1I','1J','1K','1L','1M','1N','1O','1P']
 
 archiveName_discr=[' - Various 1',' - Various 2', ' - Retro, Euro Teams', ' - Sixers',' - Bucks',' - Bulls',' - Cavaliers',' - Celtics',' - Clippers',' - Grizzlies',' - Hawk',' - Heat',
 ' - Hornets',' - Jazz',' - Kings',' - Knicks',' - Lakers',' - Magic',' - Mavericks',' - Nets',' - Nuggets',' - Pacers',' - Pelicans',' - Pistons',' - Raptors',' - Rockets',' - Spurs',
-' - Suns',' - Thunder',' - Timberwolves',' - Trailblazers',' - Warriors',' - Wizards',' - Shaq and Ernie',' - Shoes',' - Create A Player',' - Various Audio',' - English Commentary',' - Spanish Commentary',' - MyTeam, Thumbs']
+' - Suns',' - Thunder',' - Timberwolves',' - Trailblazers',' - Warriors',' - Wizards',' - Shaq and Ernie',' - Shoes',' - Create A Player',' - Various Audio',' - English Commentary',' - Spanish Commentary',' - MyTeam, Thumbs', ' - Updates 1', ' - Updates 2']
 
 #for i in range(len(archiveName_list)): archiveName_list[i]+=archiveName_discr[i]
 
@@ -51,7 +51,7 @@ settings_dict = {}
 bool_dict = {'False':False,
              'True':True}
 for i in range(len(archiveName_list)): archiveName_dict[archiveName_list[i]]=i
-for i in range(len(archiveName_list)): settings_dict[archiveName_list[i]]=True
+for i in range(len(archiveName_list)): settings_dict[archiveName_list[i]]="False"
 
 index_table=[0x63000000,0x6E000000,0x73000000,0x74000000,0x70000000]
 
@@ -569,7 +569,7 @@ class ImportPanel(QDialog):
         super(ImportPanel, self).__init__()
         self.CurrentImageType = self.nvidia_opts[0]
         self.CurrentMipmap = self.mipMaps[11]
-        self.swizzleFlag = False
+        self.swizzleFlag = True
         self.ImportStatus = False
         self.initUI()
 
@@ -606,6 +606,7 @@ class ImportPanel(QDialog):
         sub_layout = QHBoxLayout()
         but = QCheckBox()
         but.setText('Swizzle')
+        but.setChecked(True)
         but.stateChanged.connect(self.setSwizzleFlag)
 
         sub_layout.addWidget(but)
@@ -841,7 +842,7 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         #GLWIDGET
         self.glviewer=GLWidgetQ(self)
         self.splitter_4.addWidget(self.glviewer)
-        self.glviewer.renderText(0.5,0.5,"3dgamdevblog")
+        self.glviewer.renderText(0.5,0.5,"3dgamedevblog")
         #self.glviewer.changeObject()
         
         #self.glviewer.cubeDraw()
@@ -879,37 +880,24 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         #image_pix=QPixmap.fromImage(image)
         self.status_label=QLabel()
         #self.connect(self.status_label, SIGNAL('clicked()'), self.visit_url)
-        self.status_label.setText("<a href=\"http://3dgamedevblog.com/\">3dgamedevblog.com</a>")
+        self.status_label.setText("<a href=\"https://www.paypal.com/us/cgi-bin/webscr?cmd=_flow&SESSION=FMas13DeNuH8rl8Bim_ZoIUjQLq-iJ5wmbiMn99JsOsKuHdh_Mh6LJibde8&dispatch=5885d80a13c0db1f8e263663d3faee8d66f31424b43e9a70645c907a6cbd8fb4/\">Donate to 3dgamedevblog</a>")
         self.status_label.setTextFormat(Qt.RichText)
         self.status_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         self.status_label.setOpenExternalLinks(True)
         #self.status_label.setPixmap(image_pix)
         
-        self.statusBar.addPermanentWidget(self.progressbar)
+        #self.statusBar.addPermanentWidget(self.progressbar)
         self.statusBar.addPermanentWidget(self.status_label)
         self.statusBar.showMessage('Ready')
-        
-        
-        ###Try parsing Settings File
-        try:
-            sf=open('settings.ini','r')
-            sf.readline()
-            sf.readline()
-            self.mainDirectory=sf.readline().split(' : ')[-1][:-1]
-            print(self.mainDirectory)
-            set=sf.readlines()
-            for setting in set:
-                settings_dict[setting.split(' : ')[0]]=setting.split(' : ')[1][:-1]
-        except:
-            print('Settings File Not Found')
-        
+
         #preferences window
         
-        self.pref_window=QWidget()
+        self.pref_window=QDialog()
         self.pref_window.setWindowTitle("Preferences")
         #self.pref_window.resize(500,300)
         
-        
+        self.preferences_checkFile()
+
         horizontal_layout=QGridLayout(self.pref_window)
         hpos=0
         vpos=0
@@ -978,6 +966,8 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         layout=QVBoxLayout(self.pref_window)
         layout.addLayout(horizontal_layout_3)
         
+
+
         layout.addWidget(settingsLabel)
         layout.addWidget(settingsGroupBox)
         layout.addLayout(horizontal_layout_2)
@@ -985,6 +975,8 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         self.pref_window.setLayout(layout)
         self.pref_window_buttonGroup=settingsGroupBox
         self.pref_window_Directory=settingsLineEdit
+        
+
         
         #About Dialog
         about_action=QAction(self.menubar)
@@ -1021,6 +1013,8 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         #layout=QVBoxLayout()
         #self.groupBox_3.setLayout(layout)
         #self.splitter_2.setSizes([100,50])
+        #check settings file
+        
         
        
     
@@ -1032,6 +1026,24 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
     def preferences_window(self):
         self.pref_window.show()
     
+    def preferences_checkFile(self):
+        ###Try parsing Settings File
+        try:
+            sf=open('settings.ini','r')
+            sf.readline()
+            sf.readline()
+            self.mainDirectory=sf.readline().split(' : ')[-1][:-1]
+            print(self.mainDirectory)
+            set=sf.readlines()
+            for setting in set:
+                settings_dict[setting.split(' : ')[0]]=setting.split(' : ')[1][:-1]
+        except:
+            msgbox=QMessageBox()
+            msgbox.setWindowTitle("Warning")
+            msgbox.setText("Settings file not found. Please set your preferences")
+            msgbox.exec_()
+            
+
     def preferences_selectAll(self):
         for child in self.pref_window_buttonGroup.children():
                 if isinstance(child, QCheckBox):
