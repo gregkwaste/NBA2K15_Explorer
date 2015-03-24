@@ -88,8 +88,6 @@ class scheduleItem: #not used keep thinking...
         for key in datadict:
             setattr(self,key,datadict[key])
 
-
-
 class sub_file:
     def __init__(self,data,typ,size):
         self.files=[]
@@ -311,8 +309,6 @@ class sub_file:
         else:
             print('Unknown type: ',hex(struct.unpack('>I',self.data.read(4))[0]))
         
-        
-
 class x38header:
     def __init__(self,f):
         self.id0=struct.unpack('<I',f.read(4))[0]
@@ -635,9 +631,151 @@ class ImportPanel(QDialog):
     def setSwizzleFlag(self):
         self.swizzleFlag = not self.swizzleFlag
         
+class AboutDialog(QWidget):
+    def __init__(self,parent=None):
+        super(AboutDialog,self).__init__(parent)
+        self.setWindowTitle("About")
+        self.setFixedSize(500,200)
+        layout=QVBoxLayout()
+        #main label
+        lab=QLabel()
+        lab.setAlignment(Qt.AlignCenter)
+        lab.setText("<P><b><FONT COLOR='#000000' FONT SIZE = 5>NBA 2K15 Explorer v0.28</b></P></br>")
+        layout.addWidget(lab)
+        lab=QLabel()
+        lab.setAlignment(Qt.AlignCenter)
+        lab.setText("<P><b><FONT COLOR='#000000' FONT SIZE = 2>Coded by: gregkwaste</b></P></br>")
+        layout.addWidget(lab)
+        
+        #textbox
+        tex=QTextBrowser()
+        f=open("about.html")
+        tex.setHtml(f.read())
+        f.close()
+        tex.setOpenExternalLinks(True)
+        tex.setReadOnly(True)
+        layout.addWidget(tex)
+        
+        self.setLayout(layout)
 
+class PreferencesWindow(QDialog):
+    def __init__(self,parent=None):
+        super(PreferencesWindow,self).__init__(parent)
+        self.setWindowTitle("Preferences")
+        self.mainDirectory='C:\\'
+        self.preferences_checkFile()
+        #self.pref_window.resize(500,300)
         
         
+        horizontal_layout=QGridLayout(self)
+        hpos=0
+        vpos=0
+        for i in range(len(archiveName_list)):
+            op_name=archiveName_list[i]
+            button=QCheckBox(self)
+            button.setText(op_name+archiveName_discr[i])
+            button.setChecked(bool_dict[settings_dict[op_name]])
+            horizontal_layout.addWidget(button,hpos,vpos)
+            vpos+=1
+            if vpos>8:
+                hpos+=1
+                vpos=0
+
+
+        horizontal_layout_2=QHBoxLayout()
+        button=QPushButton()
+        button.setText("Select All")
+        button.clicked.connect(self.preferences_selectAll)
+        horizontal_layout_2.addWidget(button)
+        
+        button=QPushButton()
+        button.setText("Select None")
+        button.clicked.connect(self.preferences_selectNone)
+        horizontal_layout_2.addWidget(button)
+        
+        button=QPushButton()
+        button.setText("Save Settings")
+        button.clicked.connect(self.preferences_saveSettings)
+        horizontal_layout_2.addWidget(button)
+        
+        horizontal_layout_3=QHBoxLayout()
+        lab=QLabel()
+        lab.setText("Select NBA 2K15 Directory: ")
+        horizontal_layout_3.addWidget(lab)
+        
+        settingsLineEdit=QLineEdit()
+        settingsLineEdit.setText(self.mainDirectory)
+        settingsLineEdit.setReadOnly(True)
+        horizontal_layout_3.addWidget(settingsLineEdit)
+        
+        settingsPathButton=QPushButton()
+        settingsPathButton.setText("Select")
+        settingsPathButton.clicked.connect(self.preferences_loadDirectory)
+        horizontal_layout_3.addWidget(settingsPathButton)
+        
+        settingsLabel=QLabel()
+        settingsLabel.setText("Select Archives to Load")
+        
+        settingsGroupBox=QGroupBox()
+        settingsGroupBox.setLayout(horizontal_layout)
+        settingsGroupBox.setTitle("Archives")
+        
+        layout=QVBoxLayout(self)
+        layout.addLayout(horizontal_layout_3)
+        
+
+        layout.addWidget(settingsLabel)
+        layout.addWidget(settingsGroupBox)
+        layout.addLayout(horizontal_layout_2)
+        
+        self.setLayout(layout)
+        self.pref_window_buttonGroup=settingsGroupBox
+        self.pref_window_Directory=settingsLineEdit
+
+
+
+        #Preferences Window Functions
+    def preferences_checkFile(self):
+        ###Try parsing Settings File
+        try:
+            sf=open('settings.ini','r')
+            sf.readline()
+            sf.readline()
+            self.mainDirectory=sf.readline().split(' : ')[-1][:-1]
+            print(self.mainDirectory)
+            set=sf.readlines()
+            for setting in set:
+                settings_dict[setting.split(' : ')[0]]=setting.split(' : ')[1][:-1]
+        except:
+            msgbox=QMessageBox()
+            msgbox.setWindowTitle("Warning")
+            msgbox.setText("Settings file not found. Please set your preferences")
+            msgbox.exec_()
+            
+
+    def preferences_selectAll(self):
+        for child in self.pref_window_buttonGroup.children():
+                if isinstance(child, QCheckBox):
+                    child.setChecked(True)
+    def preferences_selectNone(self):
+        for child in self.pref_window_buttonGroup.children():
+                if isinstance(child, QCheckBox):
+                    child.setChecked(False)
+    def preferences_saveSettings(self):
+        f=open('settings.ini','w')
+        f.writelines(('NBA 2K Explorer Settings File \n','Version 0.1 \n'))
+        f.write('NBA 2K15 Path : '+self.mainDirectory+'\n')
+        for child in self.pref_window_buttonGroup.children():
+            if isinstance(child, QCheckBox):
+                f.write(child.text().split(' ')[0]+' : '+str(child.isChecked())+'\n')
+        f.close()
+        print('Settings Saved')
+                
+    def preferences_loadDirectory(self):
+        selected_dir=QFileDialog.getExistingDirectory(caption="Choose Export Directory")
+        self.pref_window_Directory.setText(selected_dir)
+        self.mainDirectory=selected_dir
+
 class TreeItem(object):
     def __init__(self, data, parent=None):
         self.parentItem = parent
@@ -780,10 +918,10 @@ class TreeModel(QAbstractItemModel):
         self.progressTrigger.emit(100)
             
 class SortModel(QSortFilterProxyModel):
-     def __init__(self,parent=None):
+    def __init__(self,parent=None):
          super(SortModel,self).__init__(parent)
          self.model=self.sourceModel()
-     def lessThan(self, left, right):
+    def lessThan(self, left, right):
          #print(left,right)
          leftData = self.sourceModel().data(left,self.sortRole())
          rightData = self.sourceModel().data(right,self.sortRole())
@@ -792,6 +930,19 @@ class SortModel(QSortFilterProxyModel):
              return int(leftData) < int(rightData)
          except ValueError:
              return leftData < rightData
+
+    def filterAcceptsRow(self, row_num, source_parent):
+        ''' Overriding the parent function '''
+        model = self.sourceModel()
+        source_index = model.index(row_num, 0, source_parent)
+        offset_index = model.index(row_num, 1, source_parent)
+
+        if source_index.parent().row()==-1: #Leave Parents in the TreeView always
+            return True
+        elif self.filterRegExp().pattern() in model.data(source_index,Qt.DisplayRole) or \
+           self.filterRegExp().pattern() in str(model.data(offset_index,Qt.DisplayRole)):
+            return True
+        return False
 
 class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
     def __init__(self,parent=None):
@@ -803,10 +954,36 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         self.actionApply_Changes.triggered.connect(self.runScheduler)
         self.actionPreferences.triggered.connect(self.preferences_window)
         self.clipboard=QClipboard()
+
+        self.prepareUi()
         
+        self.pref_window=PreferencesWindow() # preferences window
+        
+        #self properties
+        self._active_file=None
+        self.list=[]
+        
+        
+        #About Dialog
+        about_action=QAction(self.menubar)
+        about_action.setText("About")
+        about_action.triggered.connect(self.about_window)
+        self.menubar.addAction(about_action)
+        
+        self.about_dialog=AboutDialog() # Create About Dialog
+        
+    def prepareUi(self):
         self.main_viewer_model=TreeModel(("Archive Name", "Offset", "Size"))
         self.main_viewer_sortmodel=SortModel()
         self.main_viewer_sortmodel.setSourceModel(self.main_viewer_model)
+
+        #SortModelFilterOptions
+        self.main_viewer_sortmodel.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.main_viewer_sortmodel.setFilterKeyColumn(-1)
+        self.main_viewer_sortmodel.setFilterFixedString("")
+
+        #SearchBar Options
+        self.searchBar.returnPressed.connect(self.mainViewerFilter)
         
         self.treeView.setUniformRowHeights(True)
         #self.treeView.doubleClicked.connect(self.test)
@@ -870,12 +1047,6 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         self.main_viewer_model.progressTrigger.connect(self.progressbar.setValue)
         
         
-        #self properties
-        self._active_file=None
-        self.mainDirectory = 'C:\\'
-        self.list=[]
-        
-        
         #3dgamedevblog label
         #image_pix=QPixmap.fromImage(image)
         self.status_label=QLabel()
@@ -890,185 +1061,22 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         self.statusBar.addPermanentWidget(self.status_label)
         self.statusBar.showMessage('Ready')
 
-        #preferences window
+        #Shortcuts
+        #shortcut=QShortcut(QKeySequence(self.tr("Ctrl+F","Find")),self.treeView)
+        #shortcut.activated.connect(self.find)
         
-        self.pref_window=QDialog()
-        self.pref_window.setWindowTitle("Preferences")
-        #self.pref_window.resize(500,300)
-        
-        self.preferences_checkFile()
+    def mainViewerFilter(self):
+        self.main_viewer_sortmodel.setFilterFixedString(self.searchBar.text())
 
-        horizontal_layout=QGridLayout(self.pref_window)
-        hpos=0
-        vpos=0
-        for i in range(len(archiveName_list)):
-            op_name=archiveName_list[i]
-            button=QCheckBox(self.pref_window)
-            button.setText(op_name+archiveName_discr[i])
-            button.setChecked(bool_dict[settings_dict[op_name]])
-            horizontal_layout.addWidget(button,hpos,vpos)
-            vpos+=1
-            if vpos>8:
-                hpos+=1
-                vpos=0
-
-        # for op_name in archiveName_list:
-        #     button=QCheckBox(self.pref_window)
-        #     button.setText(op_name)
-        #     button.setChecked(bool_dict[settings_dict[op_name]])
-        #     horizontal_layout.addWidget(button,hpos,vpos)
-        #     vpos+=1
-        #     if vpos>8:
-        #         hpos+=1
-        #         vpos=0
-        
-        hpos+=1
-        #print(hpos,vpos)
-        horizontal_layout_2=QHBoxLayout()
-        button=QPushButton()
-        button.setText("Select All")
-        button.clicked.connect(self.preferences_selectAll)
-        horizontal_layout_2.addWidget(button)
-        
-        button=QPushButton()
-        button.setText("Select None")
-        button.clicked.connect(self.preferences_selectNone)
-        horizontal_layout_2.addWidget(button)
-        
-        button=QPushButton()
-        button.setText("Save Settings")
-        button.clicked.connect(self.preferences_saveSettings)
-        horizontal_layout_2.addWidget(button)
-        
-        
-        horizontal_layout_3=QHBoxLayout()
-        lab=QLabel()
-        lab.setText("Select NBA 2K15 Directory: ")
-        horizontal_layout_3.addWidget(lab)
-        
-        settingsLineEdit=QLineEdit()
-        settingsLineEdit.setText(self.mainDirectory)
-        settingsLineEdit.setReadOnly(True)
-        horizontal_layout_3.addWidget(settingsLineEdit)
-        
-        settingsPathButton=QPushButton()
-        settingsPathButton.setText("Select")
-        settingsPathButton.clicked.connect(self.preferences_loadDirectory)
-        horizontal_layout_3.addWidget(settingsPathButton)
-        
-        settingsLabel=QLabel()
-        settingsLabel.setText("Select Archives to Load")
-        
-        settingsGroupBox=QGroupBox()
-        settingsGroupBox.setLayout(horizontal_layout)
-        settingsGroupBox.setTitle("Archives")
-        
-        layout=QVBoxLayout(self.pref_window)
-        layout.addLayout(horizontal_layout_3)
-        
-
-
-        layout.addWidget(settingsLabel)
-        layout.addWidget(settingsGroupBox)
-        layout.addLayout(horizontal_layout_2)
-        
-        self.pref_window.setLayout(layout)
-        self.pref_window_buttonGroup=settingsGroupBox
-        self.pref_window_Directory=settingsLineEdit
-        
-
-        
-        #About Dialog
-        about_action=QAction(self.menubar)
-        about_action.setText("About")
-        about_action.triggered.connect(self.about_window)
-        self.menubar.addAction(about_action)
-        
-        self.about_dialog=QWidget()
-        self.about_dialog.setWindowTitle("About")
-        self.about_dialog.setFixedSize(500,200)
-        layout=QVBoxLayout()
-        #main label
-        lab=QLabel()
-        lab.setAlignment(Qt.AlignCenter)
-        lab.setText("<P><b><FONT COLOR='#000000' FONT SIZE = 5>NBA 2K15 Explorer v0.27</b></P></br>")
-        layout.addWidget(lab)
-        lab=QLabel()
-        lab.setAlignment(Qt.AlignCenter)
-        lab.setText("<P><b><FONT COLOR='#000000' FONT SIZE = 2>Coded by: gregkwaste</b></P></br>")
-        layout.addWidget(lab)
-        
-        #textbox
-        tex=QTextBrowser()
-        f=open("about.html")
-        tex.setHtml(f.read())
-        f.close()
-        tex.setOpenExternalLinks(True)
-        tex.setReadOnly(True)
-        layout.addWidget(tex)
-        
-        self.about_dialog.setLayout(layout)
-        
-        #Info panel
-        #layout=QVBoxLayout()
-        #self.groupBox_3.setLayout(layout)
-        #self.splitter_2.setSizes([100,50])
-        #check settings file
-        
-        
-       
+    #Show Preferences Window
+    def preferences_window(self):
+        self.pref_window.show()
     
     #About Window
     def about_window(self):
         self.about_dialog.show()
     
-    #Preferences Window Functions
-    def preferences_window(self):
-        self.pref_window.show()
-    
-    def preferences_checkFile(self):
-        ###Try parsing Settings File
-        try:
-            sf=open('settings.ini','r')
-            sf.readline()
-            sf.readline()
-            self.mainDirectory=sf.readline().split(' : ')[-1][:-1]
-            print(self.mainDirectory)
-            set=sf.readlines()
-            for setting in set:
-                settings_dict[setting.split(' : ')[0]]=setting.split(' : ')[1][:-1]
-        except:
-            msgbox=QMessageBox()
-            msgbox.setWindowTitle("Warning")
-            msgbox.setText("Settings file not found. Please set your preferences")
-            msgbox.exec_()
-            
-
-    def preferences_selectAll(self):
-        for child in self.pref_window_buttonGroup.children():
-                if isinstance(child, QCheckBox):
-                    child.setChecked(True)
-    def preferences_selectNone(self):
-        for child in self.pref_window_buttonGroup.children():
-                if isinstance(child, QCheckBox):
-                    child.setChecked(False)
-    def preferences_saveSettings(self):
-        f=open('settings.ini','w')
-        f.writelines(('NBA 2K Explorer Settings File \n','Version 0.1 \n'))
-        f.write('NBA 2K15 Path : '+self.mainDirectory+'\n')
-        for child in self.pref_window_buttonGroup.children():
-            if isinstance(child, QCheckBox):
-                f.write(child.text().split(' ')[0]+' : '+str(child.isChecked())+'\n')
-        f.close()
-        print('Settings Saved')
-                
-    def preferences_loadDirectory(self):
-        selected_dir=QFileDialog.getExistingDirectory(caption="Choose Export Directory")
-        self.pref_window_Directory.setText(selected_dir)
-        self.mainDirectory=selected_dir
-        
     #Main Functions
-        
     def visit_url(self):
         webbrowser.open('http:\\3dgamedevblog.com')
      
@@ -1148,18 +1156,17 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
             return
         menu=QMenu()
         menu.addAction(self.tr("Export"))
-        if subfile_typ=='ZIP':
-            menu.addAction(self.tr("Fix ZIP"))
+        #if subfile_typ=='ZIP':
+        #    menu.addAction(self.tr("Fix ZIP"))
 
         res=menu.exec_(self.treeView_2.viewport().mapToGlobal(position))
         
         if res.text()=='Export':
             self.export_items(selmod)
-        elif res.text()=='Fix ZIP':
-            print('Fixing Zip')
-            self.fixZip(subfile_off,subfile_size)
-        
-        
+        #elif res.text()=='Fix ZIP':
+        #    print('Fixing Zip')
+        #    self.fixZip(subfile_off,subfile_size)
+
 
     def fixZip(self,off,size):
         #Loading zip to buffer
@@ -1392,7 +1399,7 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         
         gc.collect()
         
-        
+        self.mainDirectory=self.pref_window.mainDirectory # update mainDirectory
         file_name=self.mainDirectory+'\\'+'0A'
         print(self.mainDirectory,file_name)
         #file_name,file_filter=QFileDialog.getOpenFileName(caption='Select 0A File')
@@ -1576,6 +1583,7 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
             if not arch_name in self._active_file: #check archive name
                 self._active_file=self.mainDirectory+'\\'+arch_name
             
+            
             f=open(self._active_file,'r+b') #open big archive
             f.seek(subarch_offset) #seek to iff offset
             t=StringIO() #buffer for iff storage
@@ -1658,6 +1666,7 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
                     t.seek(subfile_off+local_off+compOffset)
                     t.write(self.schedulerFiles[i])
                     t.write(tail.read())
+                    tail.close()
                     
                     #Fix IFF Header
                     t.seek(0) #seek to iff start
@@ -1705,17 +1714,34 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
                     t=StringIO()
                     t.write(self.schedulerFiles[i])
 
+                
                 #Append iff into the big archive
                 t.seek(0)
                 f.seek(subarch_offset+subarch_size)
-                tail=f.read()
+                
+                tailPath=self.mainDirectory+os.sep+'tail'
+                tail=open(tailPath,'wb')
+                tailSize=os.fstat(tail.fileno()).st_size
+                buf=1
+                while buf:
+                    buf=f.read(1024*1024*1024)
+                    print(len(buf))
+                    tail.write(buf)
+                tail.close()
+                print("Done Writing tail - TESTING")
+                #Write actual data to archive
                 f.seek(subarch_offset)
                 f.write(t.read())
-                f.write(tail)
                 t.close()
-                f.close()
 
+                print("Writing back tail to big archive - TESTING")
+                #Writing back the tail
+                with open(tailPath,'rb') as tail:
+                    f.write(tail.read(1024*1024*1024))
+                f.close()
                 
+
+                    
                 #diff-=compOffset #restore diff
                 #Updating 0A database
                 f=open(self.mainDirectory+'\\'+'0A','r+b')
@@ -1860,7 +1886,8 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         
         
         #filling the main model
-        self.main_viewer_model.setupModelData(self.list, self.main_viewer_model.rootItem,self.pref_window_buttonGroup)
+        self.main_viewer_model.setupModelData(self.list, self.main_viewer_model.rootItem,self.pref_window.pref_window_buttonGroup)
+        print('Testing')
         self.treeView.setModel(self.main_viewer_sortmodel)
         #storing list to main_list
         self.statusBar.showMessage('Sorting...')
@@ -2196,8 +2223,3 @@ app=QApplication(sys.argv)
 form=MainWindow()
 form.show()
 app.exec_()       
-
-    
-
-
-
