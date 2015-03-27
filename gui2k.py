@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file '2kgui.ui'
 #
-# Created: Mon Mar 23 17:36:35 2015
+# Created: Thu Mar 26 23:01:29 2015
 #      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PySide import QtCore, QtGui
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(1280, 700)
+        MainWindow.resize(1276, 700)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -52,18 +52,19 @@ class Ui_MainWindow(object):
         self.tabWidget.addTab(self.tab, "")
         self.gridLayout.addWidget(self.splitter_4, 0, 1, 1, 1)
         self.splitter = QtGui.QSplitter(self.centralwidget)
+        self.splitter.setLineWidth(1)
         self.splitter.setOrientation(QtCore.Qt.Vertical)
         self.splitter.setObjectName("splitter")
         self.groupBox_2 = QtGui.QGroupBox(self.splitter)
         self.groupBox_2.setObjectName("groupBox_2")
         self.verticalLayout_5 = QtGui.QVBoxLayout(self.groupBox_2)
         self.verticalLayout_5.setObjectName("verticalLayout_5")
-        self.treeView = QtGui.QTreeView(self.groupBox_2)
-        self.treeView.setUniformRowHeights(True)
-        self.treeView.setSortingEnabled(False)
-        self.treeView.setObjectName("treeView")
-        self.treeView.header().setVisible(True)
-        self.verticalLayout_5.addWidget(self.treeView)
+        self.archiveTabs = QtGui.QTabWidget(self.groupBox_2)
+        self.archiveTabs.setMinimumSize(QtCore.QSize(0, 264))
+        self.archiveTabs.setTabPosition(QtGui.QTabWidget.North)
+        self.archiveTabs.setTabShape(QtGui.QTabWidget.Rounded)
+        self.archiveTabs.setObjectName("archiveTabs")
+        self.verticalLayout_5.addWidget(self.archiveTabs)
         self.horizontalLayout = QtGui.QHBoxLayout()
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.searchLabel = QtGui.QLabel(self.groupBox_2)
@@ -87,7 +88,7 @@ class Ui_MainWindow(object):
         self.gridLayout.addWidget(self.splitter, 0, 0, 1, 1)
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtGui.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 1280, 21))
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 1276, 21))
         self.menubar.setObjectName("menubar")
         self.menuFile = QtGui.QMenu(self.menubar)
         self.menuFile.setObjectName("menuFile")
@@ -116,7 +117,12 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
         self.tabWidget.setCurrentIndex(0)
+        self.archiveTabs.setCurrentIndex(-1)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
+        MainWindow.setTabOrder(self.archiveTabs, self.searchBar)
+        MainWindow.setTabOrder(self.searchBar, self.treeView_2)
+        MainWindow.setTabOrder(self.treeView_2, self.tabWidget)
+        MainWindow.setTabOrder(self.tabWidget, self.treeView_3)
 
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "NBA 2K15 Explorer", None, QtGui.QApplication.UnicodeUTF8))

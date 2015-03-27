@@ -19,7 +19,7 @@ from models_2k import Model2k
 
 
 #internal imports
-import sys,struct,time,threading,gc,pylzma,os,zlib,webbrowser
+import sys,struct,time,threading,gc,pylzma,os,zlib,webbrowser,operator
 from StringIO import StringIO
 from subprocess import call
 from collections import OrderedDict
@@ -83,6 +83,11 @@ def read_string_n(f,n):
     return c
 
 
+class dataInitiate:
+    def __init__(self,msg,datalen):
+        self.msg=msg
+        self.datalen=datalen
+
 class scheduleItem: #not used keep thinking...
     def __init__(self,datadict):
         for key in datadict:
@@ -95,6 +100,13 @@ class sub_file:
         self.size=size
         self.type=typ
         self.namelist=[]
+        # ------
+        #self.data.seek(0)
+        #f=open('C:\\test','wb')
+        #f.write(self.data.read())
+        #f.close()
+        #self.data.seek(0)
+        # ------
         self._open()
     
     @staticmethod
@@ -162,9 +174,7 @@ class sub_file:
                 break
         return True
 
-        
-
-
+ 
     def _get_zip_offset(self,index):
         print('Seeking Inner File')
         self.data.seek(0)
@@ -190,7 +200,6 @@ class sub_file:
         return ret
     
     def _zip_parser(self):
-        print('Inner parsing .zip file')
         self.data.seek(0)
         self.sects=[]
         self.infSects=[]
@@ -248,7 +257,6 @@ class sub_file:
         t=StringIO()
         t.write(self.data.read(size))
         t.seek(0)
-        #f=open('C:\\test','wb')
         
         if type=='LZMA':
             t.seek(4,1)
@@ -260,7 +268,16 @@ class sub_file:
         return t
         
     def _open(self):
+        gc.collect()
         if self.type=='ZIP':
+            print('Opening ZIP file')
+            #------
+            self.data.seek(0)
+            f=open('C:\\test','wb')
+            f.write(self.data.read())
+            f.close()
+            self.data.seek(0)
+            #------
             self._zip_parser() #populate class by parsing the zip
         elif self.type=='DDS':
             self.files=[('dds_file',0,self.size,'DDS')]
@@ -285,27 +302,33 @@ class sub_file:
             #print('Reopening')
             self._open()
         elif self.type=='ZLIB':
-            self.data.seek(0x10,1)
+            print('Opening ZLIB file')
+            self.data.seek(0x10,0)
             t=StringIO()
-            self.size=t.write(zlib.decompress(self.data.read()))
+            t.write(zlib.decompress(self.data.read()))
+            self.size=t.len
             t.seek(0)
             typecheck=struct.unpack('>I',t.read(4))[0]
+            t.seek(0)
             try:
                 typecheck=type_dict[typecheck]
+                self.type=typecheck
             except:
-                print('Unknown type: ',hex(typecheck))
-                return
-            print(self.size)
+                #Handle Zlib XML files
+                self.type='XML'
+                self.size-=0x10
+                t.seek(0x10)
             self.data=StringIO()
             self.data.write(t.read())
             self.data.seek(0)
             t.close()
-            self.files=self._open()    
+            self._open()
         elif self.type=='MODEL':
             self.files=[('model_file',0,self.size,'MODEL')]
             self.namelist=['model_file']
-            
-        
+        elif self.type=='XML':
+            self.files=[('xml_file',0,self.size,'XML')]
+            self.namelist=['xml_file']
         else:
             print('Unknown type: ',hex(struct.unpack('>I',self.data.read(4))[0]))
         
@@ -323,26 +346,57 @@ class x38header:
         f.write(struct.pack('<2I6Q',self.id0,self.id1,self.type,self.size,self.comp_type,self.start,self.stop,0))
 
 class file_entry:
-    def __init__(self,f):
-        self.off=f.tell()
-        self.id0=struct.unpack('<I',f.read(4))[0]
-        self.id1=struct.unpack('<I',f.read(4))[0]
-        self.type=struct.unpack('<Q',f.read(8))[0]
-        self.g_id=0 #used later
-        self.size=0 #used later
-        if self.type==1: #zlib or lzma data
-            self.data=struct.unpack('<Q',f.read(8))
-        elif self.type==2: # zip files
-            self.data=struct.unpack('<2Q',f.read(16))
-        elif self.type==3: # empty /separators?
-            self.data=struct.unpack('<3Q',f.read(24))
+    def __init__(self,f,custom=False,offset=None,id0=None,id1=None,type=None,g_id=None,size=None,data=None):
+        if not custom:
+            self.off=f.tell()
+            self.id0=struct.unpack('<I',f.read(4))[0]
+            self.id1=struct.unpack('<I',f.read(4))[0]
+            self.type=struct.unpack('<Q',f.read(8))[0]
+            self.g_id=0 #used later
+            self.size=0 #used later
+            if self.type==1: #zlib or lzma data
+                self.data=struct.unpack('<Q',f.read(8))
+            elif self.type==2: # zip files
+                self.data=struct.unpack('<2Q',f.read(16))
+            elif self.type==3: # empty /separators?
+                self.data=struct.unpack('<3Q',f.read(24))
+            else:
+                print('unknown type: ',self.type)
+            #data[1] contains the file offsets
         else:
-            print('unknown type: ',self.type)
-        #data[1] contains the file offsets
+            #Create Custom fileEntry
+            self.off=offset
+            self.id0=id0
+            self.id1=id1
+            self.type=type
+            self.g_id=g_id
+            self.size=size
+            self.data=data
+
+class cdf_file_entry:
+    def __init__(self,f,custom=False,offset=None,id0=None,id1=None,type=None,g_id=None,size=None,data=None):
+        if not custom:
+            self.off=struct.unpack('<Q',f.read(8))[0]
+            self.size=struct.unpack('<Q',f.read(8))[0]
+            f.seek(0x8,1)
+            self.id0=0
+            self.id1=0
+            self.g_id=0
+            self.type=0
+            self.pad=struct.unpack('<Q',f.read(8))[0] #used later
+        else:
+            #Create Custom fileEntry
+            self.off=offset
+            self.id0=id0
+            self.id1=id1
+            self.type=type
+            self.g_id=g_id
+            self.size=size
+            self.data=data
 
 class header:
-    def __init__(self,f,main_off):
-        self.main_offset=main_off
+    def __init__(self,f):
+        #self.main_offset=main_off
         self.magic=struct.unpack('>I',f.read(4))[0]
         #exceptions
         if self.magic==0x7EA1CFBB: #handle ogg  files
@@ -367,7 +421,7 @@ class header:
         elif self.magic==0x504B0304: #zip files
             f.seek(-4,1)
             off=f.tell()
-            subfile=sub_file(f,)
+            subfile=sub_file(f,'ZIP',stop-off)
             self.file_entries=[]
             self.file_entries.append((off,stop-off))
             return
@@ -388,15 +442,12 @@ class header:
         self.header_length=struct.unpack('<I',f.read(4))[0]
         self.next_off=struct.unpack('>I',f.read(4))[0]
         f.read(4)
-        self.sub_head_count=struct.unpack('<I',f.read(4))[0] # x38 headers counter
-        f.read(4)
-        s = struct.unpack('<I',f.read(4))[0]
-        print('Testing s: ',s)
-        self.x38headersOffset = s + f.tell() - 4 - 1
+        self.sub_head_count=struct.unpack('<Q',f.read(8))[0] # x38 headers counter
+        s = struct.unpack('<Q',f.read(8))[0]
+        self.x38headersOffset = s + f.tell() - 8 - 1
         self.head_count=(s-9)//16 #additional information on the header counter
-        f.read(4)
-        self.sub_heads=[]
         self.file_count=struct.unpack('<Q',f.read(8))[0]
+        self.sub_heads=[]
         #self.sub_heads.append(f.tell()-self.main_offset + struct.unpack('<Q',f.read(8))[0]-1)
         self.sub_heads.append(f.tell() + struct.unpack('<Q',f.read(8))[0]-1)
         if self.magic==0x305098F0 and self.head_count>1:
@@ -409,93 +460,123 @@ class header:
         self.x38headers=[]
         for i in range(self.sub_head_count):
             self.x38headers.append(x38header(f))
+        #Fix x38headers start
+        #for x38 in self.x38headers:
+        #    x38.start+=main_off
         self.sub_heads_data=[]
         self.file_entries=[]
         self.file_name=None
         self.file_sizes=[]
 
         #Store Basic Information (Included to all archives)
-        #f.seek(self.main_offset+self.sub_heads[0]) #not correct for all archives
         
         #small_base=self.main_offset+f.tell()-1
-        small_base=f.tell()-1
-        print('small base: ',small_base, 'file_count: ',self.file_count)
-        #print('elseing')
-        f.seek(self.sub_heads[0])
-        temp=[]
-        small_base=0
-        for j in range(self.file_count):
-            temp.append(struct.unpack('<Q',f.read(8))[0]+self.sub_heads[0]-1+small_base)
-            small_base+=8
-        self.sub_heads_data.append(temp)
-        print(self.sub_heads_data)
-        temp=[]
-        #force file_count for another weird kind of archives
-
-        #if self.sub_head_count==1 and self.x38headers[0].type==8:      I will check if it works without this
-        #    self.file_count=1
-
-        g_id=0
-        mode=0
-        for j in range(self.file_count):
-            print('Seeking to: ',self.sub_heads_data[0][j])
-            f.seek(self.sub_heads_data[0][j])
-
-            temp=file_entry(f)
-            temp.g_id=g_id
-
-            if not temp.type==3:
-                if mode==0:
-                    temp.size=temp.data[0]
-                else:
-                    temp.size=temp.data[1]
-                self.file_entries.append(temp)
-            else:
-                if not temp.data[0]:
-                    mode=1
-                else:
-                    mode=0
-                g_id+=1
-
-        #file sizes calculation
-
-        #find data x38
-        main_x38=None
+        #small_base=f.tell()-1
+        
         for x38 in self.x38headers:
-            if x38.type==1:
-                main_x38=x38
-                break
-
-        if main_x38:
-            stop=main_x38.stop
-        else:
-            stop=self.x38headers[0].stop
-        print(stop)
-        for j in range(len(self.file_entries)-1):
-            self.file_sizes.append(self.file_entries[j+1].size-self.file_entries[j].size)
-        self.file_sizes.append(stop-self.file_entries[-1].size) # store the last item size
-
-
-
-        if self.head_count>1 and self.head_count<4:
-            temp=[]
-            for j in range(self.file_count):
-                temp.append(struct.unpack('<Q',f.read(8))[0]+small_base)
-            self.sub_heads_data.append(temp)
-            #file sizes
-            self.file_sizes=[]
-            temp=[]
-            for j in range(self.file_count*self.sub_head_count):
-                self.file_sizes.append(struct.unpack('<2Q',f.read(16)))
-            if self.sub_head_count>1:
-                temp=self.file_sizes
-                self.file_sizes=[]
+            print('x38 Start: ',x38.start,'x38 Type: ',x38.type,'x38 CompType: ',x38.comp_type)
+            if x38.type==1 and self.magic==0x94EF3BFF:
+                print('IFF File Container')
+                f.seek(self.sub_heads[0])
+                small_base = self.sub_heads[0]-1
+                print('File Description Offset Base: ',small_base, 'file_count: ',self.file_count)
+                
+                templist=[]
+                small_base=0
                 for j in range(self.file_count):
-                    self.file_sizes.append(temp[self.sub_head_count*j])
+                    templist.append(struct.unpack('<Q',f.read(8))[0]+self.sub_heads[0]-1+small_base)
+                    small_base+=8
+                
+                #print(templist)
+                #force file_count for another weird kind of archives
+                #if self.sub_head_count==1 and self.x38headers[0].type==8:      I will check if it works without this
+                #    self.file_count=1
+                g_id=0
+                mode=0
+                for j in range(self.file_count):
+                    f.seek(templist[j])
 
-            self.file_name=read_string_2(f)
+                    temp=file_entry(f)
+                    temp.g_id=g_id
+
+                    if not temp.type==3:
+                        if mode==0:
+                            temp.size=temp.data[0]
+                        else:
+                            temp.size=temp.data[1]
+                        self.file_entries.append(temp)
+                    else:
+                        if not temp.data[0]:
+                            mode=1
+                        else:
+                            mode=0
+                        g_id+=1
+
+                #file sizes calculation and offsets
+                stop=x38.stop
+                for j in range(len(self.file_entries)-1):
+                    self.file_sizes.append(self.file_entries[j+1].size-self.file_entries[j].size)
+                self.file_sizes.append(stop-self.file_entries[-1].size) # store the last item size
+                for entry in self.file_entries: # fix offsets
+                    entry.size+=x38.start 
+                    entry.off=entry.size
+
+                self.sub_heads_data.append(templist) #Append templist
+            elif x38.type==0x10:
+                print('Zlib Section')
+                temp=file_entry(f,custom=True,offset=None,id0='ZLIB',id1=None,type=None,g_id=0,size=x38.start,data=None)
+                self.file_entries.append(temp)
+                self.file_sizes.append(x38.size)
+            elif x38.type==0x00 and x38.comp_type==0x00:
+                pass #Empty Section
+            elif x38.type==0x08 and x38.comp_type==0x00 and self.magic==0x94EF3BFF:
+                pass #Empty Section
+            elif x38.type==0x01 and x38.comp_type==0x00 and self.magic==0x305098F0:
+                print('CDF File Container')
+                big_base = self.sub_heads[1]-1 #Omitting practically FUCKING USELESS First Section
+                f.seek(big_base+1)
+                
+                print('File Description Offset Base: ',big_base, 'file_count: ',self.file_count)
+                
+                templist=[]
+                small_base=0
+                for j in range(self.file_count):
+                    templist.append(struct.unpack('<Q',f.read(8))[0]+big_base+small_base)
+                    small_base+=8
+                
+                for j in range(self.file_count):
+                    f.seek(templist[j])
+                    self.file_entries.append(cdf_file_entry(f))
+                
+                #file sizes calculation and offsets
+                for entry in self.file_entries: self.file_sizes.append(entry.size)
+                for entry in self.file_entries: entry.off+=x38.start # fix offsets
+                
+                self.sub_heads_data.append(templist) #Append templist
+
+                #Parse CDF File Name
+                f.seek(self.sub_heads[-1])
+                self.file_name=read_string_2(f)
+            else:
+                print('Unimplemented Type: ',x38.type)
 
 
+        #if self.head_count>1 and self.head_count<4:
+            #temp=[]
+            #for j in range(self.file_count):
+            #    temp.append(struct.unpack('<Q',f.read(8))[0]+small_base)
+            #self.sub_heads_data.append(temp)
+            #file sizes
+            #self.file_sizes=[]
+            #temp=[]
+            #for j in range(self.file_count*self.sub_head_count):
+            #    self.file_sizes.append(struct.unpack('<2Q',f.read(16)))
+            #if self.sub_head_count>1:
+            #    temp=self.file_sizes
+            #    self.file_sizes=[]
+            #    for j in range(self.file_count):
+            #        self.file_sizes.append(temp[self.sub_head_count*j])
+            
 class ModelPanel(QDialog):
     def __init__(self):
         super(ModelPanel,self).__init__()
@@ -647,6 +728,7 @@ class AboutDialog(QWidget):
         lab.setText("<P><b><FONT COLOR='#000000' FONT SIZE = 2>Coded by: gregkwaste</b></P></br>")
         layout.addWidget(lab)
         
+
         #textbox
         tex=QTextBrowser()
         f=open("about.html")
@@ -657,6 +739,12 @@ class AboutDialog(QWidget):
         layout.addWidget(tex)
         
         self.setLayout(layout)
+
+class IffPanel(QWidget):
+    def __init__(self,parent=None):
+        super(IffPanel,self).__init__(parent)
+        self.setWindowTitle("Iff Panel")
+        self.setFixedSize(800,600)
 
 class PreferencesWindow(QDialog):
     def __init__(self,parent=None):
@@ -917,6 +1005,48 @@ class TreeModel(QAbstractItemModel):
                     count+=1
         self.progressTrigger.emit(100)
             
+class MyTableModel(QAbstractTableModel):
+    def __init__(self, mylist, header, *args):
+        QAbstractTableModel.__init__(self, parent=None, *args)
+        self.mylist = mylist
+        self.header = header
+    def rowCount(self, parent):
+        return len(self.mylist)
+    def columnCount(self, parent):
+        return len(self.mylist[0])
+    def data(self, index, role):
+        if not index.isValid():
+            return None
+        elif role != Qt.DisplayRole:
+            return None
+        return self.mylist[index.row()][index.column()]
+    def headerData(self, col, orientation, role):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self.header[col]
+        return None
+    def sort(self, col, order):
+        """sort table by given column number col"""
+        self.emit(SIGNAL("layoutAboutToBeChanged()"))
+        self.mylist = sorted(self.mylist,
+            key=operator.itemgetter(col))
+        if order == Qt.DescendingOrder:
+            self.mylist.reverse()
+        self.emit(SIGNAL("layoutChanged()"))
+
+    def findlayer(self, name):
+        """
+        Find a layer in the model by it's name
+        """
+        print('Searching')
+        startindex = self.index(0, 0)
+        items = self.match(startindex, Qt.DisplayRole, name, 1, Qt.MatchExactly | Qt.MatchWrap | Qt.MatchContains)
+        try:
+            print(items)
+            return items[0]
+        except IndexError:
+            return QModelIndex()
+
+
 class SortModel(QSortFilterProxyModel):
     def __init__(self,parent=None):
          super(SortModel,self).__init__(parent)
@@ -937,9 +1067,7 @@ class SortModel(QSortFilterProxyModel):
         source_index = model.index(row_num, 0, source_parent)
         offset_index = model.index(row_num, 1, source_parent)
 
-        if source_index.parent().row()==-1: #Leave Parents in the TreeView always
-            return True
-        elif self.filterRegExp().pattern() in model.data(source_index,Qt.DisplayRole) or \
+        if self.filterRegExp().pattern() in model.data(source_index,Qt.DisplayRole) or \
            self.filterRegExp().pattern() in str(model.data(offset_index,Qt.DisplayRole)):
             return True
         return False
@@ -949,7 +1077,7 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         super(MainWindow,self).__init__(parent)
         self.setWindowIcon(QIcon('tool_icon.ico'))
         self.setupUi(self)
-        self.actionOpen.triggered.connect(self.open_file)
+        self.actionOpen.triggered.connect(self.open_file_table)
         self.actionExit.triggered.connect(self.close_app)
         self.actionApply_Changes.triggered.connect(self.runScheduler)
         self.actionPreferences.triggered.connect(self.preferences_window)
@@ -958,7 +1086,8 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         self.prepareUi()
         
         self.pref_window=PreferencesWindow() # preferences window
-        
+        self.iffPanel=IffPanel()
+
         #self properties
         self._active_file=None
         self.list=[]
@@ -973,30 +1102,23 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         self.about_dialog=AboutDialog() # Create About Dialog
         
     def prepareUi(self):
-        self.main_viewer_model=TreeModel(("Archive Name", "Offset", "Size"))
-        self.main_viewer_sortmodel=SortModel()
-        self.main_viewer_sortmodel.setSourceModel(self.main_viewer_model)
+        self.main_viewer_sortmodels=[] #List for sortmodels storage
+        self.current_sortmodel=None
+        self.current_tableView=None
+        self.current_tableView_index=None
+        
+        #Active File Data Attribs
+        self._active_file_data=None
+        self._active_file_handle=None
+        self._active_file_path=None
 
-        #SortModelFilterOptions
-        self.main_viewer_sortmodel.setFilterCaseSensitivity(Qt.CaseInsensitive)
-        self.main_viewer_sortmodel.setFilterKeyColumn(-1)
-        self.main_viewer_sortmodel.setFilterFixedString("")
+        #ArchiveTabs Wigdet Functions
+        self.archiveTabs.currentChanged.connect(self.set_currentTableData)
 
         #SearchBar Options
         self.searchBar.returnPressed.connect(self.mainViewerFilter)
         
-        self.treeView.setUniformRowHeights(True)
-        #self.treeView.doubleClicked.connect(self.test)
-        self.treeView.activated.connect(self.test)
-        self.treeView.clicked.connect(self.test)
-        
-        #explicit gui options
-        self.treeView.header().setResizeMode(QHeaderView.Stretch)
-        
-        #Archive TreeView context menu
-        self.treeView.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.treeView.customContextMenuRequested.connect(self.main_ctx_menu)
-        
+
         #Subfiles Treeview settings
         self.treeView_2.clicked.connect(self.read_subfile)
         self.treeView_2.activated.connect(self.read_subfile)
@@ -1011,7 +1133,7 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         
         #Subfile Contents Treeview settings
         self.treeView_3.clicked.connect(self.open_subfile)
-        self.treeView_3.entered.connect(self.open_subfile)
+        #self.treeView_3.entered.connect(self.open_subfile)
         
         self.treeView_3.setUniformRowHeights(True)
         self.treeView_3.header().setResizeMode(QHeaderView.Stretch)
@@ -1044,14 +1166,14 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         self.progressbar=QProgressBar()
         self.progressbar.setMaximumSize(500,19)
         self.progressbar.setAlignment(Qt.AlignRight)
-        self.main_viewer_model.progressTrigger.connect(self.progressbar.setValue)
+        #self.main_viewer_model.progressTrigger.connect(self.progressbar.setValue)
         
         
         #3dgamedevblog label
         #image_pix=QPixmap.fromImage(image)
         self.status_label=QLabel()
         #self.connect(self.status_label, SIGNAL('clicked()'), self.visit_url)
-        self.status_label.setText("<a href=\"https://www.paypal.com/us/cgi-bin/webscr?cmd=_flow&SESSION=FMas13DeNuH8rl8Bim_ZoIUjQLq-iJ5wmbiMn99JsOsKuHdh_Mh6LJibde8&dispatch=5885d80a13c0db1f8e263663d3faee8d66f31424b43e9a70645c907a6cbd8fb4/\">Donate to 3dgamedevblog</a>")
+        self.status_label.setText("<a href=\"https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=arianos10@gmail.com&lc=US&item_name=3dgamedevblog&amount=5.00&currency_code=USD&no_note=0&bn=PP-DonationsBF:btn_donateCC_LG.gif:NonHostedGuest\">Donate to 3dgamedevblog</a>")
         self.status_label.setTextFormat(Qt.RichText)
         self.status_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         self.status_label.setOpenExternalLinks(True)
@@ -1065,9 +1187,19 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         #shortcut=QShortcut(QKeySequence(self.tr("Ctrl+F","Find")),self.treeView)
         #shortcut.activated.connect(self.find)
         
-    def mainViewerFilter(self):
-        self.main_viewer_sortmodel.setFilterFixedString(self.searchBar.text())
+    def set_currentTableData(self,index):
+        #Setting Current Sortmodel, to the Sortmodel of the TableView of the Current Tab
+        self.current_tableView=self.archiveTabs.widget(index)
+        self.current_sortmodel=self.current_tableView.model()
+        self.current_tableView_index=QModelIndex()
 
+    def mainViewerFilter(self):
+        index=self.current_sortmodel.findlayer(self.searchBar.text())
+        selmod=self.current_tableView.selectionModel()
+        selmod.clear()
+        selmod.select(index,QItemSelectionModel.Rows)
+        self.current_tableView.setCurrentIndex(index)
+    
     #Show Preferences Window
     def preferences_window(self):
         self.pref_window.show()
@@ -1081,20 +1213,29 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         webbrowser.open('http:\\3dgamedevblog.com')
      
     def main_ctx_menu(self,position):
-        parent_selmod=self.treeView.selectionModel().selectedIndexes()
-        name=self.main_viewer_sortmodel.data(parent_selmod[0],Qt.DisplayRole)
-        off=self.main_viewer_sortmodel.data(parent_selmod[1],Qt.DisplayRole)
-        size=self.main_viewer_sortmodel.data(parent_selmod[2],Qt.DisplayRole)
-        
+        selmod=self.current_tableView.selectionModel().selectedIndexes()
+        arch_name=self.archiveTabs.tabText(self.archiveTabs.currentIndex())
+        name=self.current_sortmodel.data(selmod[0],Qt.DisplayRole)
+        off=self.current_sortmodel.data(selmod[1],Qt.DisplayRole)
+        size=self.current_sortmodel.data(selmod[3],Qt.DisplayRole)
+
         menu=QMenu()
         menu.addAction(self.tr("Copy Offset"))
+        menu.addAction(self.tr("Copy Name"))
         menu.addAction(self.tr("Import Archive"))
         menu.addAction(self.tr("Export Archive"))
-        res=menu.exec_(self.treeView.viewport().mapToGlobal(position))
+        menu.addAction(self.tr("Open in IFF Editor"))
+        
+        res=menu.exec_(self.current_tableView.viewport().mapToGlobal(position))
+        
+        if not res: return
         
         if res.text()=='Copy Offset':
             self.clipboard.setText(str(off))
             self.statusBar.showMessage('Copied '+str(off)+ ' to clipboard.')
+        elif res.text()=='Copy Name':
+            self.clipboard.setText(str(name))
+            self.statusBar.showMessage('Copied '+str(name)+ ' to clipboard.')
         elif res.text()=='Import Archive':
             print('Importing iff File over: ',name,off,size)
 
@@ -1142,6 +1283,9 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
             f.close()
             t.close()
             self.statusBar.showMessage('Exported .iff to : '+ str(location[0]))
+        elif res.text()=="Open in IFF Editor":
+            print('Opening IFF Editor')
+            self.iffPanel.show()
     
     
     def ctx_menu(self,position):
@@ -1171,8 +1315,8 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
     def fixZip(self,off,size):
         #Loading zip to buffer
         t=StringIO()
-        self._archive.seek(off)
-        t.write(self._archive.read(size))
+        self._active_file.seek(off)
+        t.write(self._active_file.read(size))
         zipfile=sub_file(t,'ZIP',size)
         t.seek(0)
 
@@ -1293,8 +1437,8 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
             
             
             t=StringIO() #open temporary memory stream
-            self._archive.seek(off) 
-            t.write(self._archive.read(size)) #write data to temporary file
+            self._active_file_data.seek(off) 
+            t.write(self._active_file_data.read(size)) #write data to temporary file
             
             if typ=='ZIP':
                 f_name+='.zip'
@@ -1319,6 +1463,9 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
                     f_name+='.zip'
                 elif struct.unpack('>I',data[0:4])[0]==0x44445320:
                     f_name+='.dds'
+                else:
+                    f_name+='xml'
+
             else:
                 t.seek(0)
                 data=t.read()
@@ -1333,37 +1480,54 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
             k.close()
             t.close() 
             
-    def test(self):
-        print('Row Clicked')
-        selmod=self.treeView.selectionModel().selectedIndexes()
-        parent_index=self.main_viewer_sortmodel.parent(selmod[0]) #get parent index from the first selected child
-        arch_name=self.main_viewer_sortmodel.data(parent_index,Qt.DisplayRole) # get the archive name from the parent index
-        off=self.main_viewer_sortmodel.data(selmod[1],Qt.DisplayRole) # archive offset
-        size=self.main_viewer_sortmodel.data(selmod[2],Qt.DisplayRole) # archive size
-        print(off)
-        
-        if not arch_name in self._active_file:
-            self._active_file=self.mainDirectory+'\\'+arch_name
-            #file_name,file_filter=QFileDialog.getOpenFileName(caption='Select '+arch_name+ ' File')
-            #self._active_file=file_name
-        
-        try:
-            f=open(self._active_file,'rb')
-        except:
-            msgbox=QMessageBox()
-            msgbox.setText("File Not Found\n Make sure you have selected the correct NBA 2K15 Installation Path")
-            msgbox.exec_()
+    
+    def test(self): #Sub Archive Reader
+        selmod=self.current_tableView.selectionModel().selectedIndexes()
+        '''Check Current Index'''
+        if self.current_tableView_index==selmod[0].row():
             return
-         
-        #archive stored in self._archive   
-        f.seek(off)
-        self._archive=StringIO()
-        gc.collect()
-        self._archive.write(f.read(size))
-        self._archive.seek(0)
-        f.close()
+        arch_name=self.archiveTabs.tabText(self.archiveTabs.currentIndex())
+        off=self.current_sortmodel.data(selmod[1],Qt.DisplayRole)
+        size=self.current_sortmodel.data(selmod[3],Qt.DisplayRole)
         
-        loc=archive_parser(self._archive,off)
+        if arch_name not in self._active_file: #File not already opened
+            try:
+                if isinstance(self._active_file_handle,file):
+                    self._active_file_handle.close()
+                self._active_file=self.mainDirectory+os.sep+arch_name #Get the New arhive file path
+                self._active_file_handle=open(self._active_file,'rb') #Opening File
+            except:
+                msgbox=QMessageBox()
+                msgbox.setText("File Not Found\n Make sure you have selected the correct NBA 2K15 Installation Path")
+                msgbox.exec_()
+                return
+        
+        
+        self._active_file_handle.seek(off)
+        t=StringIO()
+        t.write(self._active_file_handle.read(size))
+        t.seek(0)
+        self._active_file_data=t
+
+        print('Searching in : ',self._active_file)
+        print('Handle Path : ',self._active_file_handle.name)
+
+        
+        gc.collect()
+        
+        loc=archive_parser(self._active_file_data)
+        if isinstance(loc,dataInitiate):
+            ###Answering Data Delivery Request
+            #Getting the Data
+            self._active_file_data.close() #Closing the file
+            self._active_file_handle.seek(off) #Big archive already open
+            t=StringIO()
+            t.write(self._active_file_handle.read(loc.datalen))
+            t.seek(0)
+            self._active_file_data=t
+            loc=archive_parser(self._active_file_data) #Call archive parser again
+        
+
         self.file_list=SortModel()
         self.file_listModel=TreeModel(("Name","Offset","Type","Size"))
         self.file_list.setSourceModel(self.file_listModel)
@@ -1382,7 +1546,53 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         self.treeView_2.setSortingEnabled(True) #enable sorting
         self.treeView_2.sortByColumn(1,Qt.SortOrder.AscendingOrder) #sort by offset
 
+        self.current_tableView_index=selmod[0].row()
+
+    def open_file_table(self):
+        #Delete Current Tabs
+        while self.archiveTabs.count():
             
+            widg=self.archiveTabs.widget(self.archiveTabs.currentIndex())
+            self.archiveTabs.removeTab(self.archiveTabs.currentIndex())
+            try:
+                widg.deleteLater()
+            except:
+                pass
+
+        gc.collect()
+        self.mainDirectory=self.pref_window.mainDirectory # update mainDirectory
+        file_name=self.mainDirectory+os.sep+'0A'
+        print(self.mainDirectory,file_name)
+        
+        self._active_file=file_name #set active file to 0A file
+        self._0Afile=file_name
+        self._active_file_handle=open(self._active_file,'rb')
+
+        
+        self.statusBar.showMessage('Getting archives...')
+        self.fill_archive_list() #Fill Archive List
+
+        try:
+            pass
+            num=self.load_archive_database_tableview()
+        except:
+            msgbox=QMessageBox()
+            msgbox.setText("File Not Found\n Make sure you have selected the correct NBA 2K15 Installation Path")
+            msgbox.exec_()
+            return
+
+        #self.main_viewer_model=MyTableModel()
+
+        #Setup second layout
+        self.file_list=SortModel()
+        self.file_listModel=TreeModel(("Name","Offset","Type","Size"))
+        self.file_list.setSourceModel(self.file_listModel)
+        self.treeView_2.setModel(self.file_list) #Update the treeview
+
+        self.statusBar.showMessage(str(num)+ ' archives detected.')
+        gc.collect()
+
+
     def open_file(self):
         #clear
         #create models for the list views
@@ -1423,12 +1633,11 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         name,off,oldCompSize,type = self.subfile.files[selmod]
         
         #Get archive Data
-        parent_selmod=self.treeView.selectionModel().selectedIndexes()
-        parent_index=self.main_viewer_sortmodel.parent(parent_selmod[0]) #get parent index from the first selected child
-        arch_name=str(self.main_viewer_sortmodel.data(parent_index,Qt.DisplayRole)) # get the archive name from the parent index
-        subarch_name=self.main_viewer_sortmodel.data(parent_selmod[0],Qt.DisplayRole) #get the subarchive name (contains the archive global id)
-        subarch_offset=self.main_viewer_sortmodel.data(parent_selmod[1],Qt.DisplayRole)
-        subarch_size=self.main_viewer_sortmodel.data(parent_selmod[2],Qt.DisplayRole)
+        parent_selmod=self.current_tableView.selectionModel().selectedIndexes()
+        arch_name=self.archiveTabs.tabText(self.archiveTabs.currentIndex())
+        subarch_name=self.current_sortmodel.data(parent_selmod[0],Qt.DisplayRole)
+        subarch_offset=self.current_sortmodel.data(parent_selmod[1],Qt.DisplayRole)
+        subarch_size=self.current_sortmodel.data(parent_selmod[3],Qt.DisplayRole)
         print(arch_name,subarch_offset,subarch_size)
         
         #Get Subfile Data
@@ -1660,9 +1869,7 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
 
                         tail.seek(0)
 
-                        
-                        
-
+                    
                     t.seek(subfile_off+local_off+compOffset)
                     t.write(self.schedulerFiles[i])
                     t.write(tail.read())
@@ -1676,7 +1883,7 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
                     t.write(struct.pack('>I',s+diff))
 
                     t.seek(0) #seek to iff start
-                    head=header(t,subarch_offset)
+                    head=header(t)
                     head.x38headers[0].size +=diff
                     head.x38headers[0].stop +=diff
                     t.seek(head.x38headersOffset)
@@ -1794,14 +2001,15 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
             self.scheduler.setModel(self.scheduler_model)
             gc.collect()
             self.statusBar.showMessage('Import Completed')
-            self.open_file()#reload archives
+            self.open_file_table()#reload archives
             
     
     def close_app(self):
         sys.exit(0)
     
-    def load_archive_database(self):
-        f=open(self._0Afile,'rb')
+
+    def fill_archive_list(self):
+        f=self._active_file_handle
         f.seek(16)
         count_0=struct.unpack('<I',f.read(4))[0]
         f.seek(12,1)
@@ -1827,8 +2035,7 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         #Store archives data
         self.t=StringIO()
         self.t.write(f.read(0x18*count_1))
-        f.close()
-
+        
         #Split worker jobs
 
         work_length=50000
@@ -1861,8 +2068,48 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         thread.start()
         thread.join()
 
-        
         print('Finished working. Total Time Elapsed: ',time.clock()-t0)
+
+
+    def load_archive_database_tableview(self):
+        #Create Tabs according to the Settings
+        print('Parsing Settings')
+        settings=self.pref_window.pref_window_buttonGroup
+        selected_archives=[]
+        for child in settings.children():
+            if isinstance(child, QCheckBox):
+                if child.isChecked():
+                    selected_archives.append(archiveName_dict[child.text().split(' ')[0]])
+        
+        count=0
+        print('Creating ',len(selected_archives),' Tabs')
+        for i in selected_archives:
+            #Create TableViewModel
+            entry=self.list[i]
+            sortmodel=MyTableModel(entry[3],["Name","Offset","Type","Size"])
+            #Create the TableView and Assign Options
+            table_view=QTableView()
+            table_view.setModel(sortmodel)
+            table_view.horizontalHeader().setResizeMode(QHeaderView.Stretch)
+            table_view.setSortingEnabled(True)
+            table_view.sortByColumn(1, Qt.AscendingOrder)
+            table_view.setSelectionBehavior(QAbstractItemView.SelectRows)
+            table_view.setSelectionMode(QAbstractItemView.SingleSelection)
+            table_view.hideColumn(2)
+            
+                        #Functions
+            table_view.clicked.connect(self.test)
+            table_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+            table_view.customContextMenuRequested.connect(self.main_ctx_menu)
+
+            count+=len(entry[3])
+            tabId=self.archiveTabs.addTab(table_view,entry[0])
+            self.main_viewer_sortmodels.append(sortmodel) #Store the sortmodel handles
+        return count
+
+    def load_archive_database_treeview(self):
+        self.fill_archive_list(self)
+        
         #=======================================================================
         # print('Storing to external db')
         #     
@@ -1884,9 +2131,8 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         #self.database_worker()
         #return
         
-        
         #filling the main model
-        self.main_viewer_model.setupModelData(self.list, self.main_viewer_model.rootItem,self.pref_window.pref_window_buttonGroup)
+        self.main_viewer_model.setupModelData(self.list, self.main_viewer_model.rootItem, self.pref_window.pref_window_buttonGroup)
         print('Testing')
         self.treeView.setModel(self.main_viewer_sortmodel)
         #storing list to main_list
@@ -1894,25 +2140,15 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         print('Storing to Viewer')
         t0=time.clock()
         self.treeView.setSortingEnabled(True)
-        self.treeView.sortByColumn(1,Qt.SortOrder.AscendingOrder)
+        #self.treeView.sortByColumn(1,Qt.SortOrder.AscendingOrder)
         print('Finished storing. Total Time Elapsed: ',time.clock()-t0)   
         
         self.statusBar.showMessage('Ready')
         
         for i in self.list:
             print(i[0],len(i[3]))
-        
         return count_1
         
-        #self.main_list.clear()
-        
-        #self.active_file=self._0Afile
-        #if self._0Afile.path and self._0Afile.path.split('\\')[-1]=='0A':
-        #    self.status_label.set_label("Loading 2K15 Database...")
-        #    num=self.load_archive_database()
-        #    print("Total Files Detected: ",num)
-        #    self.status_label.set_label("2K15 Database Loaded")
-
     def worker(self,data,length,count_0,subarch_id):
         data.seek(0)
         #f=open('C:\\worker.txt','w')
@@ -1926,7 +2162,7 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
                 val=self.list[j][1] # full archive calculated offset
                 if id1>=val:
                     #self.main_list.append(it,('unknown_'+str(i),id1-val))
-                    self.list[j][3].append(('unknown_'+str(subarch_id),id1-val,sa,sb))
+                    self.list[j][3].append(('unknown_'+str(subarch_id),id1-val,sb,sa))
                     subarch_id+=1
                     break
     
@@ -1943,10 +2179,9 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
        
        #Exceptions
        
-       
-       self._archive.seek(off)
+       self._active_file_data.seek(off)
        data=StringIO()
-       data.write(self._archive.read(size))
+       data.write(self._active_file_data.read(size))
        data.seek(0)
        
        if typ=='OGG':
@@ -1975,6 +2210,7 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         
     def open_subfile(self):
         selmod=self.treeView_3.selectionModel().selectedIndexes()[0].row()
+        print(self.subfile.files)
         name,off,size,type=self.subfile.files[selmod]
         print('Opening ',name)
         t=self.subfile._get_file(selmod) #getting file
@@ -2011,10 +2247,10 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
             
         #try to parse over the extension
         if type=='UNKNOWN':
-            if name.split('.')[-1] in ['json']:
+            if name.split('.')[-1] in ['json'] or name=='xml_file':
                 self.text_editor.clear()
                 self.text_editor.setPlainText(str(t.read()))
-                
+
         t.close()
             
     def parseModel(self,mode,t):
@@ -2102,9 +2338,10 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
                 else:
                     self.clearLayout(item.layout())        
                   
-def archive_parser(f,main_off):
+def archive_parser(f):
     file_list=[]
-    head=header(f,main_off)
+    #f.seek(main_off)
+    head=header(f)
     # i should replace all of this with a simple append of the return function
 
     if head.magic==0x7EA1CFBB:
@@ -2131,88 +2368,83 @@ def archive_parser(f,main_off):
         file_list.append(('encrypted_data',head.file_entries[0][0],'ENCRYPTED',head.file_entries[0][1]))
         return file_list
 
+    
+    if head.file_name:
+        print("### FILENAME DETECTED ### ", head.file_name)
+
 
     #change the way we parse the archive using the x38 headers which should always work according to their sizes
-    for x38 in head.x38headers:
-        #f.seek(head.main_offset+x38.start)
-        f.seek(x38.start)
-        if x38.type==8:
-            if x38.comp_type==0:
-                #f.seek(x38.stop,1) no need to seek i will seek again on the next header
-                continue
-            else:
-                file_list.append(('padding',f.tell(),'PAD',x38.stop))
-        elif x38.type in [0x10,0x80]:
-            file_list.append(('zlib_file',f.tell(),'ZLIB',x38.stop))
-        elif x38.type==1: #work on indexed files
-            print(len(head.file_entries))
-            counter=0
-            while counter<len(head.file_entries):
-                entry=head.file_entries[counter]
-                if head.magic==0x305098F0: # i don't tweak anything here, i assume that iff files work the same
-                    off=head.file_sizes[counter][0]
-                else: # i am tweaking the cdf parts
-                    off=entry.size
+    #for x38 in head.x38headers:
+    #f.seek(head.main_offset+x38.start)
+    #    print('x38 Start: ',x38.start,'x38 Type: ',x38.type,'x38 CompType: ',x38.comp_type)
+    #    f.seek(x38.start)
+    #    if x38.type==8:
+    #        if x38.comp_type==0:
+    #            continue #Empty Section
+    #        else:
+    #            file_list.append(('padding',f.tell(),'PAD',x38.stop))
+    #    elif x38.type in [0x10,0x80]:
+    #        file_list.append(('zlib_file',f.tell(),'ZLIB',x38.stop))
+    #    elif x38.type==1: #work on indexed files
+    print('Parsing Head Files: ',len(head.file_entries))
+    counter=0
+    while counter<len(head.file_entries):
+        entry=head.file_entries[counter]
+        
+        off=entry.off
+        #f.seek(head.main_offset+x38.start+off)
+        f.seek(off)
+        #print(f.tell())
+        try:
+            f_id=struct.unpack('>I',f.read(4))[0]
+        except: #Initiate data delivery
+            ###Data Delivery is programmed for CDF use only###
+            print('###Initiating Data Delivery System###')
+            #Calculating Data Size
+            data_size=0
+            for i in head.file_entries: data_size+= (i.size+i.pad)
+            data_size+=head.header_length
+            return dataInitiate('DataInitiateRequest',data_size)
+            ###End of delivery
 
-                #f.seek(head.main_offset+x38.start+off)
-                f.seek(x38.start+off)
-                #print(f.tell())
-                f_id=struct.unpack('>I',f.read(4))[0]
-                file_offset=f.tell()-4
-                if f_id==0x01F8B0E00:
-                    file_type='GZIP LZMA'
-                elif f_id==0x504B0304:
-                    file_type='ZIP'
-                elif f_id==0x5A4C4942:
-                    file_type='ZLIB'
-                elif f_id==0x94EF3BFF:
-                    file_type='IFF ARCHIVE'
-                elif f_id==0x305098F0:
-                    file_type='CDF ARCHIVE'
-                    f.seek(-4,1) #get in position to parse new header
-                    print('Parsing inner archive',f.tell())
-                    in_items=archive_parser(f)#parse new file
-                    counter+=len(in_items)
-                    file_list.append(('cdf_file',file_offset,file_type,0))
-                    file_list.extend(in_items) #extend the existing list
-                    #handle ecnrypted data exception
-                    if in_items[0][0]=='encrypted_data':
-                        return file_list
-                elif f_id==0xC6B0581C:
-                    file_type='ENCRYPTED DATA'
-                    print(file_type)
-                    file_list.append(('encrypted_data',file_offset,file_type,0))
-                    return file_list
-                else:
-                    file_type='UNKNOWN'
-
-                file_group='group_'+str(entry.g_id)
-                #cdf archives exceptions
-                if head.magic==0x305098F0:
-                    if file_type in ['ZLIB','ZIP']:
-                        if file_type == 'ZLIB':
-                            file_size=parse_zlib_header(f)
-                        elif file_type == 'ZIP':
-                            f.seek(-4,1)
-                            file_size=parse_zip(f)[0] - file_offset
-                        #print(file_offset,f.tell())
-                        pad=0
-                        if head.sub_head_count>1: pad=8
-                        try:
-                            head.file_sizes[counter+1]=(head.file_sizes[counter][0]+file_size+pad,head.file_sizes[counter+1][1])
-                        except:
-                            print('last item')
-                    else:
-                        file_size=head.file_sizes[counter][1]
-                else:
-                    file_size=head.file_sizes[counter]
-
-                #store the file
-                print(('unknown_'+str(counter),file_offset,file_type,file_size))
-                file_list.append((file_group+'_unknown_'+str(counter),file_offset,file_type,file_size))
-                counter+=1 #next file
+        file_offset=f.tell()-4
+        if f_id==0x01F8B0E00:
+            file_type='GZIP LZMA'
+        elif f_id==0x504B0304:
+            file_type='ZIP'
+        elif f_id==0x5A4C4942:
+            file_type='ZLIB'
+        elif f_id==0x94EF3BFF:
+            file_type='IFF ARCHIVE'
+        elif f_id==0x305098F0:
+            file_type='CDF ARCHIVE'
+            f.seek(-4,1) #get in position to parse new header
+            print('Parsing inner archive',f.tell())
+            in_items=archive_parser(f)#parse new file
+            counter+=len(in_items)
+            file_list.append(('cdf_file',file_offset,file_type,0))
+            file_list.extend(in_items) #extend the existing list
+            #handle ecnrypted data exception
+            if in_items[0][0]=='encrypted_data':
+                return file_list
+        elif f_id==0xC6B0581C:
+            file_type='ENCRYPTED DATA'
+            print(file_type)
+            file_list.append(('encrypted_data',file_offset,file_type,0))
+            return file_list
         else:
-            print('unhandled type: ',x38.type,'at: ',head.main_offset)
+            file_type='UNKNOWN'
+
+        file_group='group_'+str(entry.g_id)
+        #cdf archives exceptions
+        file_size=head.file_sizes[counter]
+
+        #store the file
+        #print(('unknown_'+str(counter),file_offset,file_type,file_size))
+        file_list.append((file_group+'_unknown_'+str(counter),file_offset,file_type,file_size))
+        counter+=1 #next file
+    #    else:
+    #        print('unhandled type: ',x38.type,'at: ',head.main_offset)
 
 
     return file_list    
