@@ -1305,6 +1305,8 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
 
         res=menu.exec_(self.treeView_2.viewport().mapToGlobal(position))
         
+        if not res: return
+
         if res.text()=='Export':
             self.export_items(selmod)
         #elif res.text()=='Fix ZIP':
@@ -1412,11 +1414,8 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         print('Exporting Items')
         row_num=len(selection)//4
         #Get archive name
-        parent_selmod=self.treeView.selectionModel().selectedIndexes()
-        parent_index=self.main_viewer_sortmodel.parent(parent_selmod[0]) #get parent index from the first selected child
-        arch_name=self.main_viewer_sortmodel.data(parent_index,Qt.DisplayRole) # get the archive name from the parent index
+        arch_name=self.archiveTabs.tabText(self.archiveTabs.currentIndex())
         
-        #f=open(self._active_file,'rb')#open file for reading
         selected_dir=QFileDialog.getExistingDirectory(caption="Choose Export Directory")
         print(selected_dir)
         if not selected_dir:
@@ -2006,7 +2005,6 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
     
     def close_app(self):
         sys.exit(0)
-    
 
     def fill_archive_list(self):
         f=self._active_file_handle
@@ -2069,7 +2067,6 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         thread.join()
 
         print('Finished working. Total Time Elapsed: ',time.clock()-t0)
-
 
     def load_archive_database_tableview(self):
         #Create Tabs according to the Settings
@@ -2254,7 +2251,7 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         t.close()
             
     def parseModel(self,mode,t):
-        print('Importing with mode: ',mode)
+        print('Importing model with mode: ',mode)
         
         fType = struct.unpack('>I', t.read(4))[0]
         print('File Type: ', hex(fType))

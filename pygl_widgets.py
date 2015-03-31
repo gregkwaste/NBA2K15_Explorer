@@ -4,6 +4,7 @@ from PySide.QtGui import QMenu, QMessageBox
 from PIL import Image
 import numpy,math
 from dds import *
+from models_2k import Model2k
 
 #pyopengl checking
 try:
@@ -787,7 +788,8 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
         menu=QMenu()
         menu.addAction(self.tr('Save Image'))
         menu.addAction(self.tr('Import Image'))
-        menu.addAction(self.tr('Export Mesh'))
+        menu.addAction(self.tr('Import Model'))
+        menu.addAction(self.tr('Export Model'))
         menu.addAction(self.tr('Make Coffee'))
 
         res=menu.exec_(self.mapToGlobal(position))
@@ -858,8 +860,31 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
             self.resizeGL(self.width(),self.height())
             self.update()
             self.win.scheduler_add(im,location[0])
-        elif res.text()=='Export Mesh':
-            print('Saving Mesh to Wavefront OBJ')
+        
+        elif res.text()=='Import Model':
+            print('Importing Mesh to Viewport')
+            location=QtGui.QFileDialog.getOpenFileName(caption="Open Model File",filter='*')
+            #parse Model
+            t=open(location[0],'rb')
+            t.seek(0x4) #  Skip Header
+            first = Model2k(t)
+            first.data = first.read_strips(t)
+            first.data = first.strips_to_faces()
+            
+            #vertices
+            second = Model2k(t)
+            second.data = second.get_verts(t,100.0)
+            print(len(second.data))
+            #normals
+            third = Model2k(t)
+            third.data = third.get_normals(t)
+            t.close()
+            print('Mesh Vertex Count: ', len(second.data))
+            
+            self.object=self.customModel(first.data,second.data,third.data)
+
+        elif res.text()=='Export Model':
+            print('Saving Model to Wavefront OBJ')
             location=QtGui.QFileDialog.getSaveFileName(caption="Save File",filter='*.obj')
             f=open(location[0],'w')
 
