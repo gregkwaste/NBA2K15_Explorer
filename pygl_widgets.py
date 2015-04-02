@@ -5,6 +5,7 @@ from PIL import Image
 import numpy,math
 from dds import *
 from models_2k import Model2k
+from StringIO import StringIO
 
 #pyopengl checking
 try:
@@ -859,7 +860,7 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
 
             self.resizeGL(self.width(),self.height())
             self.update()
-            self.win.scheduler_add(im,location[0])
+            self.win.scheduler_add_texture(im,location[0])
         
         elif res.text()=='Import Model':
             print('Importing Mesh to Viewport')
@@ -878,10 +879,15 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
             #normals
             third = Model2k(t)
             third.data = third.get_normals(t)
+            k=StringIO()
+            t.seek(0)
+            k.write(t.read())
+            k.seek(0)
             t.close()
             print('Mesh Vertex Count: ', len(second.data))
             
             self.object=self.customModel(first.data,second.data,third.data)
+            self.win.scheduler_add_model(k)
 
         elif res.text()=='Export Model':
             print('Saving Model to Wavefront OBJ')

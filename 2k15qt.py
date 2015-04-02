@@ -582,6 +582,7 @@ class ModelPanel(QDialog):
         super(ModelPanel,self).__init__()
         
         self.mode=0
+        self.status=True
         self.resize(300,100)
         self.setWindowTitle('Model Panel')
         main_layout=QVBoxLayout()
@@ -621,6 +622,12 @@ class ModelPanel(QDialog):
         but.setText('Import')
         but.clicked.connect(self.changeMode)
         hor_layout.addWidget(but)
+
+        but=QPushButton()
+        but.setText('Cancel')
+        but.clicked.connect(self.quit)
+        hor_layout.addWidget(but)
+
         
         main_layout.addLayout(hor_layout)
         self.setLayout(main_layout)
@@ -633,6 +640,9 @@ class ModelPanel(QDialog):
             self.mode=0
         else:
             self.mode=1
+        self.close()
+    def quit(self):
+        self.status=False
         self.close()
         
  
@@ -1047,6 +1057,27 @@ class MyTableModel(QAbstractTableModel):
             return QModelIndex()
 
 
+class SchedulerEntry:
+    def __init__(self):
+        self.name=None
+        self.selmod=None
+        self.arch_name=None
+        self.subarch_name=None
+        self.subarch_offset=None
+        self.subarch_size=None
+        self.subfile_index=None
+        self.subfile_name=None
+        self.subfile_off=None
+        self.subfile_type=None
+        self.subfile_size=None
+        self.local_off=None
+        self.oldDecompSize=None
+        self.newDataSize=None
+        self.oldCompSize=None
+        self.newCompSize=None
+        self.chksm=None
+        self.diff=None
+        
 class SortModel(QSortFilterProxyModel):
     def __init__(self,parent=None):
          super(SortModel,self).__init__(parent)
@@ -1243,36 +1274,31 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
             t=open(location[0],'rb')
             k=t.read() #store file temporarily
             t.close()
-            #item=TreeItem((name,selmod,arch_name,subarch_name,subarch_offset,subfile_off,subfile_type,local_off,oldCompSize,newCompSize,diff),parent)
+            
+            # Create Scheduler Entry
+            sched=SchedulerEntry()
             #Scheduler Props
-            selmod = 0
-            arch_name = self._active_file.split('\\')[-1]
-            subarch_name = name
-            subarch_offset = off
-            subarch_size = size
-            subfile_name = ''
-            subfile_off = 0
-            subfile_type = 'IFF'
-            subfile_index = 0
-            subfile_size = 0
-            local_off = 0
-            oldCompSize = size
-            oldDecompSize = size
-            newCompSize = len(k)
-            newDataSize = newCompSize
-            chksm = zlib.crc32(k) 
-            diff = newCompSize - oldCompSize
+            
+            sched.name = name
+            sched.selmod = 0
+            sched.arch_name = self._active_file.split('\\')[-1]
+            sched.subarch_name = name
+            sched.subarch_offset = off
+            sched.subarch_size = size
+            sched.subfile_name = ''
+            sched.subfile_off = 0
+            sched.subfile_type = 'IFF'
+            sched.subfile_index = 0
+            sched.subfile_size = 0
+            sched.local_off = 0
+            sched.oldCompSize = size
+            sched.oldDecompSize = size
+            sched.newCompSize = len(k)
+            sched.newDataSize = sched.newCompSize
+            sched.chksm = zlib.crc32(k) 
+            sched.diff = sched.newCompSize - sched.oldCompSize
 
-            if not self.scheduler_model:
-                self.scheduler_model = TreeModel(("Name","ID","Archive","Subarchive Name", "Subarchive Offset", "Subarchive Size", "Subfile Index", "Subfile Name", "Subfile Offset", "Subfile Type","Subfile Size", "Local File Offset", "Old Decompressed Size", "New Decompressed Size", "Old Compressed Size", "New Compressed Size","CheckSum", "Diff"))
-                gc.collect()
-                self.scheduler.setModel(self.scheduler_model)
-            
-            parent = self.scheduler_model.rootItem
-            item=TreeItem((name,selmod,arch_name,subarch_name,subarch_offset,subarch_size,subfile_index,subfile_name,subfile_off,subfile_type,subfile_size,local_off,oldDecompSize,newDataSize,oldCompSize,newCompSize,chksm,diff),parent)
-            parent.appendChild(item)
-            
-            self.schedulerFiles.append(k)
+            self.addToScheduler(sched,k) #  Add to Scheduler
 
         elif res.text()=='Export Archive':
             location=QFileDialog.getSaveFileName(caption="Save File",filter='*.iff')
@@ -1289,17 +1315,25 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
     
     
     def ctx_menu(self,position):
-        selmod=self.treeView_2.selectedIndexes()
+        selmod=self.current_tableView.selectionModel().selectedIndexes()
+        arch_name=self.archiveTabs.tabText(self.archiveTabs.currentIndex())
+        subarch_name=self.current_sortmodel.data(selmod[0],Qt.DisplayRole)
+        subarch_off=self.current_sortmodel.data(selmod[1],Qt.DisplayRole)
+        subarch_size=self.current_sortmodel.data(selmod[3],Qt.DisplayRole)
+
         
+        selmod=self.treeView_2.selectedIndexes()
         subfile_name=self.file_list.data(selmod[0],Qt.DisplayRole) # file offset
         subfile_off=self.file_list.data(selmod[1],Qt.DisplayRole) # file offset
-        subfile_typ=self.file_list.data(selmod[2],Qt.DisplayRole) # subfile type
+        subfile_type=self.file_list.data(selmod[2],Qt.DisplayRole) # subfile type
         subfile_size=self.file_list.data(selmod[3],Qt.DisplayRole) # size offset
+        subfile_index=self.treeView_2.selectionModel().selectedIndexes()[0].row() #file index
 
         if len(selmod)==0: #exit if there is nothing selected
             return
         menu=QMenu()
         menu.addAction(self.tr("Export"))
+        menu.addAction(self.tr("Import"))
         #if subfile_typ=='ZIP':
         #    menu.addAction(self.tr("Fix ZIP"))
 
@@ -1309,9 +1343,103 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
 
         if res.text()=='Export':
             self.export_items(selmod)
-        #elif res.text()=='Fix ZIP':
-        #    print('Fixing Zip')
-        #    self.fixZip(subfile_off,subfile_size)
+        elif res.text()=='Import':
+            #Check for one one row selection only
+            row=selmod[0].row()
+            for i in selmod:
+                if i.row() !=row:
+                    msgbox=QMessageBox(QMessageBox.Warning,'Error',"Import one file at a time",QMessageBox.Ok)
+                    msgbox.exec_()
+                    return
+            #Import routine
+            location=QFileDialog.getOpenFileName(caption="Select file for Import",filter='*.zip ;; *.ogg ;; *.*')
+            if not location[0]: return
+            print(location)
+            
+            t=open(location[0],'rb')
+            k=t.read() #store file temporarily
+            t.close()
+            ### OGG IMPORT ###
+            if str(location[0]).split('.')[-1]=='ogg' and subfile_type=='OGG':
+                print('importing ogg')
+                ###Storing container temporarily###
+                tempiff=StringIO()
+                self._active_file_handle.seek(subarch_off)
+                tempiff.write(self._active_file_handle.read(subarch_size))
+
+                tempiff.seek(0x18)
+                fixSize=struct.unpack('<I',tempiff.read(4))[0]
+                oldDataSize=struct.unpack('<I',tempiff.read(4))[0]
+                tempiff.seek(0x1C)
+                tempiff.write(struct.pack('<I',len(k) +8 -fixSize))
+
+                oldCompSize=0x2C+fixSize+oldDataSize-8
+                
+
+                newCompSize=0x2C+fixSize+len(k)-8
+                print(oldCompSize,newCompSize)
+                tempiff.seek(0x2C) # seek to audio file start
+                tempiff.write(k) #write new ogg file data
+                tempiff.seek(0)
+                k=tempiff.read() # store the whole iff again
+
+                #Scheduler Entry
+                sched=SchedulerEntry()
+                #Scheduler Props
+                
+                sched.name = subarch_name
+                sched.selmod = 0
+                sched.arch_name = self._active_file.split('\\')[-1]
+                sched.subarch_name = subarch_name
+                sched.subarch_offset = subarch_off
+                sched.subarch_size = subarch_size
+                sched.subfile_name = ''
+                sched.subfile_off = 0
+                sched.subfile_type = 'IFF'
+                sched.subfile_index = 0
+                sched.subfile_size = 0
+                sched.local_off = 0
+                sched.oldCompSize = oldCompSize
+                sched.oldDecompSize = oldCompSize
+                sched.newCompSize = newCompSize
+                sched.newDataSize = newCompSize
+                sched.chksm = zlib.crc32(k) 
+                sched.diff = sched.newCompSize - sched.oldCompSize
+
+                self.addToScheduler(sched,k) #  Add to Scheduler
+            elif str(location[0]).split('.')[-1]=='zip' and subfile_type=='ZIP' or \
+                 str(location[0]).split('.')[-1]=='gziplzma' and subfile_type=='GZIP LZMA':
+
+                print('Importing File')
+                #Scheduler Entry
+                sched=SchedulerEntry()
+                #Scheduler Props
+                
+                sched.name = subarch_name
+                sched.selmod = selmod
+                sched.arch_name = self._active_file.split('\\')[-1]
+                sched.subarch_name = subarch_name
+                sched.subarch_offset = subarch_off
+                sched.subarch_size = subarch_size
+
+                sched.subfile_name = subfile_name
+                sched.subfile_off = subfile_off
+                sched.subfile_type = 'REPLACE'
+                sched.subfile_index = subfile_index
+                sched.subfile_size = subfile_size
+                
+                sched.local_off = 0
+                sched.oldCompSize = subfile_size
+                sched.oldDecompSize = subfile_size
+                
+                sched.newCompSize = len(k)
+                sched.newDataSize = len(k)
+                sched.chksm = zlib.crc32(k) 
+                sched.diff = sched.newCompSize - sched.oldCompSize
+
+                self.addToScheduler(sched,k) #  Add to Scheduler
+                 
+
 
 
     def fixZip(self,off,size):
@@ -1626,7 +1754,22 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
             return
         self.statusBar.showMessage(str(num)+ ' archives detected.')
     
-    def scheduler_add(self,im,fileName):
+    def addToScheduler(self,sched,k):
+        if not self.scheduler_model:
+            self.scheduler_model = TreeModel(("Name","ID","Archive","Subarchive Name", "Subarchive Offset", "Subarchive Size", "Subfile Index", "Subfile Name", "Subfile Offset", "Subfile Type","Subfile Size", "Local File Offset", "Old Decompressed Size", "New Decompressed Size", "Old Compressed Size", "New Compressed Size","CheckSum", "Diff"))
+            gc.collect()
+            self.scheduler.setModel(self.scheduler_model)
+            
+        parent = self.scheduler_model.rootItem
+        item=TreeItem((sched.name,sched.selmod,sched.arch_name,sched.subarch_name,sched.subarch_offset,
+                       sched.subarch_size,sched.subfile_index,sched.subfile_name,sched.subfile_off,sched.subfile_type,
+                       sched.subfile_size,sched.local_off,sched.oldDecompSize,sched.newDataSize,sched.oldCompSize,sched.newCompSize,
+                       sched.chksm,sched.diff),parent)
+        parent.appendChild(item)
+        
+        self.schedulerFiles.append(k)
+
+    def scheduler_add_texture(self,im,fileName):
         #Get current selected file
         selmod = self.treeView_3.selectionModel().selectedIndexes()[0].row()
         name,off,oldCompSize,type = self.subfile.files[selmod]
@@ -1688,10 +1831,6 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
             nmips = res.CurrentMipmap
             
             #print(originalImage.header.dwMipMapCount,nmips)
-
-            
-
-            
             if compFlag:
                 print('Converting Texture file')
                 self.statusBar.showMessage('Compressing Image...')
@@ -1780,6 +1919,89 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
         self.schedulerFiles.append(k)
         self.statusBar.showMessage('Texture Added to Import Schedule')
             
+    def scheduler_add_model(self,tfile):
+        #Get current selected file
+        selmod = self.treeView_3.selectionModel().selectedIndexes()[0].row()
+        name,off,oldCompSize,type = self.subfile.files[selmod]
+        
+        #Get archive Data
+        parent_selmod=self.current_tableView.selectionModel().selectedIndexes()
+        arch_name=self.archiveTabs.tabText(self.archiveTabs.currentIndex())
+        subarch_name=self.current_sortmodel.data(parent_selmod[0],Qt.DisplayRole)
+        subarch_offset=self.current_sortmodel.data(parent_selmod[1],Qt.DisplayRole)
+        subarch_size=self.current_sortmodel.data(parent_selmod[3],Qt.DisplayRole)
+        print(arch_name,subarch_offset,subarch_size)
+        
+        #Get Subfile Data
+        parent_selmod=self.treeView_2.selectionModel().selectedIndexes()
+        subfile_name=self.file_list.data(parent_selmod[0],Qt.DisplayRole) # file name
+        subfile_off=self.file_list.data(parent_selmod[1],Qt.DisplayRole) # file offset
+        subfile_type=self.file_list.data(parent_selmod[2],Qt.DisplayRole) # file type
+        subfile_size=self.file_list.data(parent_selmod[3],Qt.DisplayRole) # file size
+        subfile_index=self.treeView_2.selectionModel().selectedIndexes()[0].row() #file index
+        chksm=0
+        
+        if subfile_type=='GZIP LZMA': #override size for GZIP LZMA
+            oldCompSize=subfile_size
+            compOffset=14
+        
+        print('Replacing File ',name, 'Size ',oldCompSize)
+        
+        if subfile_type=='ZIP':
+            local_off=off
+            compOffset=4
+        else:
+            local_off=0
+        
+        tfile.seek(0)
+        newData=tfile.read()
+        tfile.close()
+        newDataSize=len(newData)
+        chksm=zlib.crc32(newData) & 0xFFFFFFFF #calculate Checksum
+        
+        k=pylzma.compress(newData,dictionary=24,eos=0) #use 16777216 bits dictionary
+        k+=b'\x00'
+        #k=k+k[0:len(k)//4] #inflating file
+        comp_f=open('test.dat','wb')
+        comp_f.write(k)
+        comp_f.close()
+        newCompSize=len(k)
+        
+        diff=newCompSize+compOffset-oldCompSize
+        
+        print('OldDecompSize: ',subfile_size,'NewDecompSize: ',newDataSize)
+        print('OldCompSize: ',oldCompSize,'NewCompSize: ',newCompSize,'Diff: ', diff)
+                
+        #Add model to Scheduler
+        sched=SchedulerEntry()
+
+        sched.name = name
+        sched.selmod = selmod
+        sched.arch_name = arch_name
+        
+        sched.subarch_name = subarch_name
+        sched.subarch_offset = subarch_offset
+        sched.subarch_size = subarch_size
+        
+        sched.subfile_name = subfile_name
+        sched.subfile_off = subfile_off
+        sched.subfile_type = subfile_type
+        sched.subfile_index = subfile_index
+        sched.subfile_size = subfile_size
+        
+        sched.local_off = local_off
+        sched.oldCompSize = oldCompSize
+        sched.oldDecompSize = subfile_size
+        sched.newCompSize = newCompSize
+        sched.newDataSize = newDataSize
+        sched.chksm = chksm
+        sched.diff = diff
+
+        self.addToScheduler(sched,k) #  Add to Scheduler
+        self.statusBar.showMessage('Model Added to Import Schedule')
+
+
+
     def runScheduler(self):
         parent=self.scheduler_model.rootItem
         rowCount=parent.childCount()
@@ -1812,6 +2034,9 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
                 print('GZIP LZMA')
                 compOffset=14
                 #t.seek(14,1) #seek to the raw gzip offset
+            elif subfile_type=='REPLACE':
+                print('Replacing File')
+                compOffset=0
             elif subfile_type=='IFF':
                 print('Importing IFF')
                 iffFlag=True
@@ -2233,6 +2458,8 @@ class MainWindow(QMainWindow,gui2k.Ui_MainWindow):
             dial=ModelPanel()
             dial.exec_()
             
+            if not dial.status: return
+
             print('Selected Mode: ',dial.mode)
             #try guessing the correct mode:
             #try:
