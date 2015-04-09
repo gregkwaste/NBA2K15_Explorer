@@ -1312,7 +1312,7 @@ class MainWindow(QMainWindow, gui2k.Ui_MainWindow):
         menu.addAction(self.tr("Copy Name"))
         menu.addAction(self.tr("Import Archive"))
         menu.addAction(self.tr("Export Archive"))
-        menu.addAction(self.tr("Open in IFF Editor"))
+        #menu.addAction(self.tr("Open in IFF Editor"))
 
         res = menu.exec_(self.current_tableView.viewport().mapToGlobal(position))
 
@@ -1367,9 +1367,9 @@ class MainWindow(QMainWindow, gui2k.Ui_MainWindow):
             f.close()
             t.close()
             self.statusBar.showMessage('Exported .iff to : ' + str(location[0]))
-        elif res.text() == "Open in IFF Editor":
-            print('Opening IFF Editor')
-            self.iffPanel.show()
+        #elif res.text() == "Open in IFF Editor":
+        #    print('Opening IFF Editor')
+        #    self.iffPanel.show()
 
     def ctx_menu(self, position):
         selmod = self.current_tableView.selectionModel().selectedIndexes()
@@ -2040,7 +2040,7 @@ class MainWindow(QMainWindow, gui2k.Ui_MainWindow):
         sched.diff = diff
 
         self.addToScheduler(sched, k)  # Add to Scheduler
-        self.statusBar.showMessage('Model Added to Import Schedule')
+        self.statusBar.showMessage('Model Added to Import Scheduler')
 
     def runScheduler(self):
         parent = self.scheduler_model.rootItem
@@ -2528,8 +2528,11 @@ class MainWindow(QMainWindow, gui2k.Ui_MainWindow):
         # Set Scale
         if mode:
             scale = 100.0
+            lightpos=[0.,-170.0,-90.0,0.0]
         else:
-            scale = 0.001
+            scale = 0.01
+            lightpos=[0.,0.,2.5,1.0]
+
 
         first = Model2k(t)
         first.data = first.read_strips(t)
@@ -2543,38 +2546,16 @@ class MainWindow(QMainWindow, gui2k.Ui_MainWindow):
         third = Model2k(t)
         if mode:
             third.data = third.get_normals(t)
+            fourth = Model2k(t)
+            fourth.data = third.get_normals(t)
+            third.data=Model2k.calculate_normals(third.data,fourth.data)
         else:
             third.data = third.fill_normals(len(second.data))
 
         print('Mesh Vertex Count: ', len(second.data))
 
-        self.glviewer.object = self.glviewer.customModel(first.data, second.data, third.data)
+        self.glviewer.object = self.glviewer.customModel(first.data, second.data, third.data,lightpos)
         return len(second.data), len(first.data)
-
-            #
-            # normals
-            # third = Model2k(f)
-            # third.data = third.read_unknown(f)
-            #
-            # tangents
-            # fourth = Model2k(f)
-            # fourth.data = fourth.read_unknown(f)
-            #
-            # uvs0
-            # fifth = Model2k(f)
-            # fifth.data = fifth.read_uvs(f)
-            #
-            # uvs1
-            # sixth = Model2k(f)
-            # sixth.data = sixth.read_uvs(f)
-            #
-            # uvs1
-            # sixth = Model2k(f)
-            # sixth.data = sixth.read_uvs(f)
-            #
-            # f.close()
-            # for i in range(len(fifth.data)):
-            # print(i, fifth.data[i])
 
     def fill_info_panel(self, info_dict):  # Not used anymore
         # setup info panel

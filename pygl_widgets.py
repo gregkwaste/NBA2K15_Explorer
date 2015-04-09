@@ -20,6 +20,9 @@ except ImportError:
                             QtGui.QMessageBox.NoButton)
     sys.exit(1)
 
+from OpenGL.constants import GLfloat
+vec4 = GL.constants.GLfloat_4
+
 #texture GL type dictionary
 image_types={'DXT1':0x83F1,
              'DXT3':0x83F2,
@@ -348,10 +351,10 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
         self.xRot = 0
         self.yRot = 0
         self.zRot = 0
-        self.scale = 1.0
+        self.scale = 0.1
         self.xMov = 0.0
         self.yMov = 0.0
-        self.lightPos=(0.0,0.0,-0.5)
+        self.lightPos=[0.,0.,2.5,1.0]
         self.sizeDiv=1.0
         self.lastPos = QtCore.QPoint()
         self.info = False
@@ -426,22 +429,30 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
             self.updateGL()
 
     def initializeGL(self):
-        #lights
-        
-
-        #rest
-        self.qglClearColor(self.trolltechPurple.darker())
+        #setup model
         verts,norms,faces=self.loadOBJ('blogtext.obj')
-        self.object = self.customModel(faces,verts,norms)
-        GL.glShadeModel(GL.GL_SMOOTH)
-        GL.glDisable(GL.GL_DEPTH_TEST)
-        GL.glEnable(GL.GL_CULL_FACE)
+        lightPos=[0.,0.,2.5,1.0]
+        self.object = self.customModel(faces,verts,norms,lightPos)
+
+        #lights
+        pos = vec4(5.0, 5.0, 10.0, 0.0)
+        red = vec4(0.8, 0.1, 0.0, 1.0)
+        green = vec4(0.0, 0.8, 0.2, 1.0)
+        blue = vec4(0.2, 0.2, 1.0, 1.0)
+
+        self.qglClearColor(self.trolltechPurple.darker())
+
+        #GL.glEnable(GL.GL_CULL_FACE)
+        GL.glEnable(GL.GL_LIGHTING)
+        GL.glEnable(GL.GL_LIGHT0)
         GL.glEnable(GL.GL_DEPTH_TEST)
+
+        
         
     def paintGL(self):
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
-        GL.glLoadIdentity()
         
+        GL.glLoadIdentity()
         #GLU.gluPerspective(0,(self.width()/self.height()),0.1,15.0)
         
         GL.glTranslatef(self.xMov,self.yMov,-5.0)
@@ -450,11 +461,16 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
         GL.glRotated(self.xRot / 16.0, 1.0, 0.0, 0.0)
         GL.glRotated(self.yRot / 16.0, 0.0, 1.0, 0.0)
         GL.glRotated(self.zRot / 16.0, 0.0, 0.0, 1.0)
-        
 
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_POSITION, (0.0, 0.0, 0.5, 0.0));
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_DIFFUSE, (self.scale,self.scale,self.scale,self.scale));
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_POSITION, self.lightPos)
+        mult=5
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_DIFFUSE, (mult*self.scale,mult*self.scale,mult*self.scale,mult*self.scale))
+        #GL.glLightfv(GL.GL_LIGHT0, GL.GL_AMBIENT, (0.24725,0.1995,0.0745,1.0))
+        #GL.glLightfv(GL.GL_LIGHT0, GL.GL_AMBIENT, (0.1,0.1,0.1,1.0))
+
+        
         GL.glCallList(self.object)
+        
         
         GL.glLoadIdentity()
         GL.glDisable(GL.GL_DEPTH_TEST)
@@ -473,6 +489,7 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
 
 
         self.renderText(0.5, self.sizeDiv - 0.1 , 0.0, "3Dgamedevblog.com")
+        
         self.qglColor(QtCore.Qt.white)
         GL.glEnable(GL.GL_DEPTH_TEST)
 
@@ -507,8 +524,8 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
         self.lastPos = QtCore.QPoint(event.pos())
 
     def wheelEvent(self, event):
-        self.scale += event.delta()/(4*120.0)
-        self.scale=max(0.1,self.scale)
+        self.scale += event.delta()/(20*4*120.0)
+        self.scale=max(0.005,self.scale)
         #print(event.delta(),self.scale)
         self.updateGL()
         
@@ -519,11 +536,11 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
 
         
         if (event.buttons() & QtCore.Qt.LeftButton) and (event.modifiers() & QtCore.Qt.AltModifier):
-            self.setXRotation(self.xRot + 8 * dy / 2.0 * self.scale)
-            self.setZRotation(self.zRot + 8 * dx / 2.0 * self.scale)
+            self.setXRotation(self.xRot + 8 * dy / 0.1 * 2.0 * self.scale)
+            self.setZRotation(self.zRot + 8 * dx / 0.1 * 2.0 * self.scale)
         elif (event.buttons() & QtCore.Qt.LeftButton):
-            self.setXRotation(self.xRot + 8 * dy / 2.0 * self.scale)
-            self.setYRotation(self.yRot + 8 * dx / 2.0 * self.scale)
+            self.setXRotation(self.xRot + 8 * dy / 0.1 * 2.0 * self.scale)
+            self.setYRotation(self.yRot + 8 * dx / 0.1 * 2.0 * self.scale)
         elif event.buttons() & QtCore.Qt.MiddleButton:
             self.setXMov(dx)
             self.setYMov(dy)
@@ -537,6 +554,27 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
         if event.key() == QtCore.Qt.Key_I:
             self.info = not self.info
             self.update()
+        elif event.key() == QtCore.Qt.Key_1:
+            self.lightPos[2]+=1.0
+            self.update()
+        elif event.key() == QtCore.Qt.Key_3:
+            self.lightPos[2]-=1.0
+            self.update()
+        elif event.key() == QtCore.Qt.Key_4:
+            self.lightPos[1]+=1.0
+            self.update()
+        elif event.key() == QtCore.Qt.Key_6:
+            self.lightPos[1]-=1.0
+            self.update()
+        elif event.key() == QtCore.Qt.Key_7:
+            self.lightPos[0]+=1.0
+            self.update()
+        elif event.key() == QtCore.Qt.Key_9:
+            self.lightPos[0]-=1.0
+            self.update()
+        elif event.key() == QtCore.Qt.Key_R:
+            print(self.lightPos,self.scale)
+
         
     def cubeDraw(self):
         print('drawingCube')
@@ -564,7 +602,7 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
         GL.glEndList()
         return dlist
 
-    def customModel(self,faces,verts,norms):
+    def customModel(self,faces,verts,norms,lightPos):
         #Get vc and fc
         self.vc=len(verts)
         self.verts = verts
@@ -572,25 +610,31 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
         self.faces=faces
 
         self.image=None
-        self.scale=1.0
+        self.scale=0.1
         self.xRot =0.0
         self.yRot =0.0
         self.zRot =0.0
         self.xMov =0.0
         self.yMov =0.0
 
+        self.lightPos=lightPos
 
         GL.glDisable(GL.GL_TEXTURE_2D)
-        GL.glEnable( GL.GL_LIGHTING )
-        GL.glLightModeli(GL.GL_LIGHT_MODEL_TWO_SIDE, GL.GL_TRUE);
+        GL.glEnable(GL.GL_LIGHTING)
+        GL.glEnable(GL.GL_CULL_FACE);
+        GL.glDisable(GL.GL_CULL_FACE);
+        GL.glEnable(GL.GL_DEPTH_TEST)
+        GL.glCullFace(GL.GL_FRONT_AND_BACK)
+        #GL.glLightModeli(GL.GL_LIGHT_MODEL_TWO_SIDE, GL.GL_TRUE);
         #GL.glEnable( GL.GL_COLOR_MATERIAL )
-        GL.glEnable( GL.GL_LIGHT0 )
+        #GL.glEnable( GL.GL_LIGHT0 )
 
         #GL.glLightfv(GL.GL_LIGHT0, GL.GL_POSITION, (0.0, 1.0, 3.0, 0.0));
         #GL.glLightfv(GL.GL_LIGHT0, GL.GL_AMBIENT, (1.0,1.0,1.0,0.6));
         #GL.glLightfv(GL.GL_LIGHT0, GL.GL_SPECULAR, (1.0,1.0,1.0,3.0));
 
         GL.glMaterialfv( GL.GL_FRONT, GL.GL_DIFFUSE, (0.7,0.7,0.7,1.0))
+        #GL.glMaterialfv( GL.GL_FRONT_AND_BACK, GL.GL_AMBIENT, (0.7,0.7,0.7,1.0))
 
         
         dlist=GL.glGenLists(1)
@@ -600,13 +644,14 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
         #GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE);
         GL.glBegin(GL.GL_TRIANGLES)
 
+
         for face in faces:
             for vert in face:
                 try:
-                    GL.glNormal3fv([v for v in norms[vert]])
+                    GL.glNormal3fv(list(norms[vert]))
                 except:
                     GL.glNormal3fv([0.0,0.0,1.0])
-                GL.glVertex3fv([v/10.0 for v in verts[vert]])
+                GL.glVertex3fv(list(verts[vert]))
                 
         GL.glEnd()
         GL.glEndList()
@@ -927,9 +972,6 @@ class GLWidgetQ(QtOpenGL.QGLWidget):
                 fa=map(int,vals)
                 faces.append([f-1 for f in fa])
         return verts,norms,faces
-
-
-
 
 
     def loadDDS(self,typ,width,height,image):
