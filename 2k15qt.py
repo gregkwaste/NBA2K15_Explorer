@@ -1753,6 +1753,14 @@ class MainWindow(QMainWindow, gui2k.Ui_MainWindow):
         try:
             pass
             num = self.load_archive_database_tableview()
+            #Store file offsets
+            # for arch in self.list:
+            #     arch_name=arch[0]
+            #     f=open(str(arch_name)+'.txt','w')
+            #     f.write(' '.join(['Name','Offset','Size'])+'\n')
+            #     for entry in arch[3]:
+            #         f.write(' '.join([str(entry[0]),str(entry[1]),str(entry[3])])+'\n')
+            #     f.close()
         except:
             msgbox = QMessageBox()
             msgbox.setText("File Not Found\n Make sure you have selected the correct NBA 2K15 Installation Path")
