@@ -229,16 +229,18 @@ class dds_file:
         w=self.header.dwWidth
         h=self.header.dwHeight
         if ''.join(self.header.ddspf.dwFourCC)=='DXT1':
-            mode=0.5
+            mode=8
         else:
-            mode=1 
+            mode=16 
         
         size=0
         while count>0:
-            #print(size)
-            size+=max(w*h*mode,16*mode)
-            w/=2
-            h/=2
+            pixels=w*h
+            blocks=(pixels-1)/16
+            mipmapSize=(blocks+1)*mode
+            size+=max(mipmapSize,mode)
+            w=max(w/2 ,4)
+            h=max(h/2 ,4)
             count-=1
         return int(size)
     

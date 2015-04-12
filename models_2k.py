@@ -1,4 +1,5 @@
 import struct, sys, os
+from math import sqrt
 #from mathutils import Vector
 
 class Model2k:
@@ -29,7 +30,6 @@ class Model2k:
             print('Wrong num2')
 
     def fill_normals(self,count):
-        
         norms=[]
         for i in range(count):
             norms.append((0,0,1))
@@ -58,25 +58,25 @@ class Model2k:
         return indices
 
     def read_vertices_half(self, f, scale):
-        v_count = (self.size- 0x10) // 8
+        v_count = (self.size - 0x10) // 8
         verts = []
         for i in range(v_count):
             v1 = struct.unpack('<h', f.read(2))[0] / 65535.0
             v2 = struct.unpack('<h', f.read(2))[0] / 65535.0
             v3 = struct.unpack('<h', f.read(2))[0] / 65535.0
             f.read(2)
-            verts.append((scale*v1, scale*v3, scale*v2))
+            verts.append((scale*v1, -scale*v2, scale*v3))
         return verts
     
     def read_normals_half(self, f):
-        v_count = (self.size- 0x10) // 8
+        v_count = (self.size - 0x10) // 8
         verts = []
         for i in range(v_count):
             v1 = struct.unpack('<h', f.read(2))[0] / 65535.0
             v2 = struct.unpack('<h', f.read(2))[0] / 65535.0
             v3 = struct.unpack('<h', f.read(2))[0] / 65535.0
             f.read(2)
-            verts.append((1.0 - v1,1.0 -  v3,1.0 -  v2))
+            verts.append((v1,v2,v3))
         return verts
 
 
@@ -140,7 +140,26 @@ class Model2k:
                     index += 1
                     flag= not flag
         return faces
-                    
+    
+    @staticmethod
+    def calculate_normals(binormals,tangents):
+        norms=[]
+        for i in range(len(binormals)):
+            tangs=tangents[i] #  original tangent vector
+            #length=sqrt(sum([v**2 for v in tangs])) #  tangent vector length
+            #tangs=[v/length for v in tangs] # normalize vector
+
+            binorms=binormals[i] #  original binormals vector
+            #length=sqrt(sum([v**2 for v in binorms])) #  binormal vector length
+            #binorms=[v/length for v in binorms] # normalize vector
+            
+            #store cross product
+            cross=(binorms[1]*tangs[2]-binorms[2]*tangs[1],
+                   binorms[2]*tangs[0]-binorms[0]*tangs[2],
+                   binorms[0]*tangs[1]-binorms[1]*tangs[0])
+            norms.append((cross[0],cross[1],cross[2]))
+            #print(cross)
+        return norms            
 #===============================================================================
 # 
 # 
