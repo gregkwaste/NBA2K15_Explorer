@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file '2kgui.ui'
 #
-# Created: Thu Mar 26 23:01:29 2015
+# Created: Mon Apr 13 12:51:24 2015
 #      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -108,10 +108,13 @@ class Ui_MainWindow(object):
         self.actionPreferences.setObjectName("actionPreferences")
         self.actionApply_Changes = QtGui.QAction(MainWindow)
         self.actionApply_Changes.setObjectName("actionApply_Changes")
+        self.actionSave_Comments = QtGui.QAction(MainWindow)
+        self.actionSave_Comments.setObjectName("actionSave_Comments")
         self.menuFile.addAction(self.actionOpen)
         self.menuFile.addAction(self.actionApply_Changes)
         self.menuFile.addAction(self.actionExit)
         self.menuOptions.addAction(self.actionPreferences)
+        self.menuOptions.addAction(self.actionSave_Comments)
         self.menubar.addAction(self.menuFile.menuAction())
         self.menubar.addAction(self.menuOptions.menuAction())
 
@@ -136,4 +139,5 @@ class Ui_MainWindow(object):
         self.actionExit.setText(QtGui.QApplication.translate("MainWindow", "Exit", None, QtGui.QApplication.UnicodeUTF8))
         self.actionPreferences.setText(QtGui.QApplication.translate("MainWindow", "Preferences", None, QtGui.QApplication.UnicodeUTF8))
         self.actionApply_Changes.setText(QtGui.QApplication.translate("MainWindow", "Apply Changes", None, QtGui.QApplication.UnicodeUTF8))
+        self.actionSave_Comments.setText(QtGui.QApplication.translate("MainWindow", "Save Comments", None, QtGui.QApplication.UnicodeUTF8))
 

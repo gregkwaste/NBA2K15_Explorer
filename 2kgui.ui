@@ -167,6 +167,7 @@
      <string>Options</string>
     </property>
     <addaction name="actionPreferences"/>
+    <addaction name="actionSave_Comments"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuOptions"/>
@@ -197,6 +198,11 @@
   <action name="actionApply_Changes">
    <property name="text">
     <string>Apply Changes</string>
+   </property>
+  </action>
+  <action name="actionSave_Comments">
+   <property name="text">
+    <string>Save Comments</string>
    </property>
   </action>
  </widget>
