@@ -1,8 +1,13 @@
 from PySide.QtCore import *
 from PySide.QtGui import *
 
+
+from pygl_widgets import GLWidgetQ
+
 import operator
+import sys
 from nba2k15commonvars import *
+
 
 class ModelPanel(QDialog):
 
@@ -65,6 +70,7 @@ class ModelPanel(QDialog):
     def quit(self):
         self.status = False
         self.close()
+
 
 class ImportPanel(QDialog):
     img_type = ['DXT1', 'DXT3', 'DXT5', 'RGBA', 'DXT5_NM']
@@ -150,11 +156,13 @@ class AboutDialog(QWidget):
         # main label
         lab = QLabel()
         lab.setAlignment(Qt.AlignCenter)
-        lab.setText("<P><b><FONT COLOR='#000000' FONT SIZE = 5>NBA 2K15 Explorer v0.28</b></P></br>")
+        lab.setText(
+            "<P><b><FONT COLOR='#000000' FONT SIZE = 5>NBA 2K15 Explorer v0.28</b></P></br>")
         layout.addWidget(lab)
         lab = QLabel()
         lab.setAlignment(Qt.AlignCenter)
-        lab.setText("<P><b><FONT COLOR='#000000' FONT SIZE = 2>Coded by: gregkwaste</b></P></br>")
+        lab.setText(
+            "<P><b><FONT COLOR='#000000' FONT SIZE = 2>Coded by: gregkwaste</b></P></br>")
         layout.addWidget(lab)
 
         # textbox
@@ -169,6 +177,106 @@ class AboutDialog(QWidget):
         self.setLayout(layout)
 
 
+class IffEditorWindow(QMainWindow):
+
+    def __init__(self, parent=None):
+        super(IffEditorWindow, self).__init__(parent)
+        self.setWindowTitle("Iff Editor")
+
+        # Window private properties
+        self.archiveContents = MyTableModel([('Test', '0', 'NONE', '0'),
+                                             ('Test1', '1', 'NONE', '1')],
+                                            ['Name', 'Offset', 'Type', 'Size'])
+
+        sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        self.setSizePolicy(sizePolicy)
+
+        centerwidget = QWidget(self)  # Define CenterWidget
+        centerwidget.setSizePolicy(sizePolicy)
+
+        mainlayout = QSplitter()  # Define Splitter
+        mainlayout.setOrientation(Qt.Horizontal)
+
+        # mainlayout=QHBoxLayout()
+        self.glwidget = GLWidgetQ(self)
+        self.glwidget.renderText(0.5, 0.5, "3dgamedevblog")
+        mainlayout.addWidget(self.glwidget)  # Add GLWidget to the splitter
+
+        vertlist = QSplitter()
+        vertlist.setOrientation(Qt.Vertical)
+
+        gbox = QGroupBox()
+        gbox.setTitle('Archive Contents')
+        vlayout = QVBoxLayout()
+
+        tableview = QTableView(parent=gbox)
+        tableview.horizontalHeader().setResizeMode(QHeaderView.Stretch)
+        tableview.horizontalHeader().setMovable(True)
+        tableview.setSortingEnabled(True)
+        tableview.sortByColumn(1, Qt.AscendingOrder)
+        tableview.setSelectionBehavior(QAbstractItemView.SelectRows)
+        tableview.setModel(self.archiveContents)
+
+        vlayout.addWidget(tableview)
+        gbox.setLayout(vlayout)
+
+        vertlist.addWidget(gbox)
+
+        # Text Editor
+        self.text_editor = QPlainTextEdit()
+
+        # File Explorer
+        self.file_explorer_model = MyTableModel(
+            [('testing',), ('testingtwo',)], ['Name'])
+        self.file_explorer_view = QTableView()
+        self.file_explorer_view.horizontalHeader().setResizeMode(
+            QHeaderView.Stretch)
+        self.file_explorer_view.setModel(self.file_explorer_model)
+
+        # Tools Tab Widget
+        gbox = QGroupBox()
+        gbox.setTitle('Tools')
+        tabwidget = QTabWidget()
+        tabwidget.addTab(self.file_explorer_view, 'File Explorer')
+        tabwidget.addTab(self.text_editor, 'Text Editor')
+
+        vlayout = QVBoxLayout()
+        vlayout.addWidget(tabwidget)
+        gbox.setLayout(vlayout)
+
+        vertlist.addWidget(gbox)
+
+        mainlayout.addWidget(vertlist)
+        self.setCentralWidget(mainlayout)
+        self.resize(1276, 700)
+
+        # Configure Menu Bar
+        self.menubar = QMenuBar(self)
+        self.fileMenu = QMenu('File', parent=self.menubar)
+
+        self.fileOpenAction = QAction(self)
+        self.fileOpenAction.setText('Open File')
+        self.fileOpenAction.triggered.connect(self.openFile)
+
+        self.closeWindowAction = QAction(self)
+        self.closeWindowAction.setText('Close')
+        self.closeWindowAction.triggered.connect(self.closeWindow)
+
+        self.fileMenu.addAction(self.fileOpenAction)
+        self.fileMenu.addAction(self.closeWindowAction)
+
+        self.menubar.addAction(self.fileMenu.menuAction())
+
+        self.setMenuBar(self.menubar)
+
+    def openFile(self):
+        print('Opening File')
+
+    def closeWindow(self):
+        print('Closing Window')
+        self.close()
 
 
 class IffPanel(QWidget):
@@ -269,11 +377,13 @@ class PreferencesWindow(QDialog):
             print(self.mainDirectory)
             set = sf.readlines()
             for setting in set:
-                settings_dict[setting.split(' : ')[0]] = setting.split(' : ')[1][:-1]
+                settings_dict[setting.split(' : ')[0]] = setting.split(
+                    ' : ')[1][:-1]
         except:
             msgbox = QMessageBox()
             msgbox.setWindowTitle("Warning")
-            msgbox.setText("Settings file not found. Please set your preferences")
+            msgbox.setText(
+                "Settings file not found. Please set your preferences")
             msgbox.exec_()
 
     def preferences_selectAll(self):
@@ -292,12 +402,14 @@ class PreferencesWindow(QDialog):
         f.write('NBA 2K15 Path : ' + self.mainDirectory + '\n')
         for child in self.pref_window_buttonGroup.children():
             if isinstance(child, QCheckBox):
-                f.write(child.text().split(' ')[0] + ' : ' + str(child.isChecked()) + '\n')
+                f.write(
+                    child.text().split(' ')[0] + ' : ' + str(child.isChecked()) + '\n')
         f.close()
         print('Settings Saved')
 
     def preferences_loadDirectory(self):
-        selected_dir = QFileDialog.getExistingDirectory(caption="Choose Export Directory")
+        selected_dir = QFileDialog.getExistingDirectory(
+            caption="Choose Export Directory")
         self.pref_window_Directory.setText(selected_dir)
         self.mainDirectory = selected_dir
 
@@ -336,6 +448,7 @@ class TreeItem(object):
 
         return 0
 
+
 class TreeModel(QAbstractItemModel):
     progressTrigger = Signal(int)
 
@@ -343,7 +456,7 @@ class TreeModel(QAbstractItemModel):
         super(TreeModel, self).__init__(parent)
 
         self.rootItem = TreeItem(columns)
-        #self.setupModelData(data, self.rootItem)
+        # self.setupModelData(data, self.rootItem)
 
     def columnCount(self, parent):
         if parent.isValid():
@@ -419,7 +532,8 @@ class TreeModel(QAbstractItemModel):
         for child in settings.children():
             if isinstance(child, QCheckBox):
                 if child.isChecked():
-                    selected_archives.append(archiveName_dict[child.text().split(' ')[0]])
+                    selected_archives.append(
+                        archiveName_dict[child.text().split(' ')[0]])
 
         print(selected_archives)
         print('Setting up data')
@@ -434,7 +548,8 @@ class TreeModel(QAbstractItemModel):
             arch_parent = TreeItem((entry[0], entry[1], entry[2]), parent)
             parent.appendChild(arch_parent)
             for kid in entry[3]:
-                arch_parent.appendChild(TreeItem((kid[0], int(kid[1]), int(kid[2]), kid[3]), arch_parent))
+                arch_parent.appendChild(
+                    TreeItem((kid[0], int(kid[1]), int(kid[2]), kid[3]), arch_parent))
                 if count > step:
                     prog += 1
                     self.progressTrigger.emit(prog)
@@ -446,17 +561,18 @@ class TreeModel(QAbstractItemModel):
 
 
 class MyTableView(QTableView):
+
     def __init__(self, parent=None):
-        QTableView.__init__(self,parent=None)
+        QTableView.__init__(self, parent=None)
 
-    def keyPressEvent(self,event):
+    def keyPressEvent(self, event):
         '''Use the default fallback'''
-        QTableView.keyPressEvent(self,event)
+        QTableView.keyPressEvent(self, event)
 
-    def editorDestroyed(self,editor):
+    def editorDestroyed(self, editor):
         print(editor)
         self.dataChanged()
-    #def commitData(self,editor):
+    # def commitData(self,editor):
     #    print('Commiting Data')
     #    print(dir(editor))
     #    print(editor.children[0])
@@ -488,8 +604,8 @@ class MyTableModel(QAbstractTableModel):
         self.mylist[index.row()][index.column()] = str(value)
         return True
 
-    def flags(self,index):
-        if index.column()==4:
+    def flags(self, index):
+        if index.column() == 4:
             return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
         else:
             return Qt.ItemIsEnabled | Qt.ItemIsSelectable
@@ -514,12 +630,14 @@ class MyTableModel(QAbstractTableModel):
         """
         for colId in range(self.columnCount()):
             startindex = self.index(0, colId)
-            items = self.match(startindex, Qt.DisplayRole, name, 1, Qt.MatchExactly | Qt.MatchWrap | Qt.MatchContains)
+            items = self.match(startindex, Qt.DisplayRole, name,
+                               1, Qt.MatchExactly | Qt.MatchWrap | Qt.MatchContains)
             try:
                 return items[0]
             except:
                 continue
         return QModelIndex()
+
 
 class SortModel(QSortFilterProxyModel):
 
@@ -547,3 +665,9 @@ class SortModel(QSortFilterProxyModel):
            self.filterRegExp().pattern() in str(model.data(offset_index, Qt.DisplayRole)):
             return True
         return False
+
+
+# app = QApplication(sys.argv)
+# form = IffEditorWindow()
+# form.show()
+# app.exec_()
